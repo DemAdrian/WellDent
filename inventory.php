@@ -100,7 +100,7 @@ layout_start('Inventory', 'inventory', [
 <div class="toolbar">
   <form method="get" class="spacer" role="search">
     <?php if ($filter): ?><input type="hidden" name="filter" value="<?= e($filter) ?>"><?php endif; ?>
-    <input type="search" name="q" value="<?= e($search) ?>" placeholder="Search item, category or supplier" aria-label="Search inventory" style="background:#fff">
+    <input type="search" name="q" value="<?= e($search) ?>" placeholder="Search item, category or supplier" aria-label="Search inventory" style="background:var(--panel)">
   </form>
   <div class="row">
     <a class="btn<?= $filter !== 'low' ? ' is-on' : '' ?>" href="inventory.php">All items</a>

@@ -89,8 +89,8 @@ function render_dental_chart(array $state): string
         . '<span class="corner" style="right:16px;top:12px">Universal Numbering</span>'
         . '<span class="corner" style="left:16px;bottom:12px">Lower Arch</span>'
         . '<svg viewBox="0 0 1000 470" role="group" aria-label="Dental chart">'
-        . '<line x1="500" y1="40" x2="500" y2="440" stroke="#b9c9c7" stroke-dasharray="6 6"/>'
-        . '<text x="40" y="236" fill="#7b8b8e" font-size="18">R</text><text x="948" y="236" fill="#7b8b8e" font-size="18">L</text>'
+        . '<line x1="500" y1="40" x2="500" y2="440" style="stroke:var(--chart-mid)" stroke-dasharray="6 6"/>'
+        . '<text x="40" y="236" style="fill:var(--tooth-num)" font-size="18">R</text><text x="948" y="236" style="fill:var(--tooth-num)" font-size="18">L</text>'
         . $svg . '</svg></div>';
 }
 

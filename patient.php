@@ -205,7 +205,7 @@ layout_start($patient['full_name'], 'patients', ['subtitle' => $patient['care_ty
     <?php if (!$conditions): ?><p class="muted small">No conditions documented. All teeth are charted as healthy.</p><?php endif; ?>
     <div class="conditions">
       <?php foreach ($conditions as $no => $c): [$label, $color, $tint] = TOOTH_STATUSES[$c['status']]; ?>
-        <div class="condition" style="background:<?= $tint ?>;border-color:<?= $color ?>33">
+        <div class="condition" style="--tint:<?= $tint ?>;--c:<?= $color ?>;border-color:<?= $color ?>33">
           <span class="n" style="background:<?= $color ?>"><?= $no ?></span>
           <b style="color:<?= $color ?>"><?= e($label) ?> <span class="muted small" style="font-weight:400">· <?= e(tooth_name($no)) ?></span></b>
           <span><?= e($c['procedure_name'] ?: '—') ?></span>

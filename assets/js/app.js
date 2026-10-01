@@ -45,6 +45,49 @@
   var auto = new URLSearchParams(location.search).get('open');
   if (auto && /^[\w-]+$/.test(auto)) openDialog('#' + auto);
 
+  // ---------- theme (System → Dark → Light), stored per device ----------
+  var THEME_KEY = 'welldent-theme';
+  var systemDark = window.matchMedia('(prefers-color-scheme: dark)');
+  function savedTheme() {
+    try { return localStorage.getItem(THEME_KEY) || 'system'; } catch (err) { return 'system'; }
+  }
+  function applyTheme(pref) {
+    var dark = pref === 'dark' || (pref === 'system' && systemDark.matches);
+    document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light');
+    var label = document.querySelector('[data-theme-label]');
+    if (label) label.textContent = pref.charAt(0).toUpperCase() + pref.slice(1);
+  }
+  var themePref = savedTheme();
+  applyTheme(themePref);
+  systemDark.addEventListener('change', function () { applyTheme(themePref); });
+  document.addEventListener('click', function (e) {
+    if (!e.target.closest('[data-theme-toggle]')) return;
+    themePref = { system: 'dark', dark: 'light', light: 'system' }[themePref] || 'system';
+    try { localStorage.setItem(THEME_KEY, themePref); } catch (err) { /* private mode: applies to this page only */ }
+    applyTheme(themePref);
+  });
+
+  // ---------- collapsible sidebar (icons only), stored per device ----------
+  var sideToggle = document.querySelector('[data-sidebar-toggle]');
+  function syncSideToggle() {
+    if (!sideToggle) return;
+    var collapsed = document.documentElement.getAttribute('data-sidebar') === 'collapsed';
+    var label = collapsed ? 'Expand sidebar' : 'Collapse sidebar';
+    sideToggle.setAttribute('aria-label', label);
+    sideToggle.setAttribute('title', label);
+    sideToggle.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+  }
+  syncSideToggle();
+  if (sideToggle) {
+    sideToggle.addEventListener('click', function () {
+      var root = document.documentElement;
+      var collapse = root.getAttribute('data-sidebar') !== 'collapsed';
+      if (collapse) root.setAttribute('data-sidebar', 'collapsed'); else root.removeAttribute('data-sidebar');
+      try { localStorage.setItem('welldent-sidebar', collapse ? 'collapsed' : 'expanded'); } catch (err) { /* this page only */ }
+      syncSideToggle();
+    });
+  }
+
   // ---------- dental chart ----------
   var chart = document.querySelector('[data-dental-chart]');
   if (chart) {

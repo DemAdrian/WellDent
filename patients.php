@@ -51,7 +51,7 @@ layout_start('Patients', 'patients', [
 <div class="toolbar">
   <form method="get" class="spacer" role="search">
     <?php foreach (['filter' => $filter, 'status' => $status, 'care' => $care] as $k => $v): if ($v !== ''): ?><input type="hidden" name="<?= $k ?>" value="<?= e($v) ?>"><?php endif; endforeach; ?>
-    <input type="search" name="q" value="<?= e($search) ?>" placeholder="Search name, phone, email, or record ID" aria-label="Search patients" style="background:#fff;padding:16px 18px">
+    <input type="search" name="q" value="<?= e($search) ?>" placeholder="Search name, phone, email, or record ID" aria-label="Search patients" style="background:var(--panel);padding:16px 18px">
   </form>
   <div class="row">
     <a class="btn<?= $filter === '' && $status === '' && $care === '' ? ' is-on' : '' ?>" href="patients.php<?= $search !== '' ? '?q=' . e(urlencode($search)) : '' ?>">All records</a>

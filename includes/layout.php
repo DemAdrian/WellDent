@@ -11,9 +11,26 @@ function icon(string $name): string
         'reports'      => '<path d="M6 3h9l4 4v14H6z"/><path d="M9 12h7M9 16h7M9 8h3"/>',
         'settings'     => '<circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1"/>',
         'logout'       => '<path d="M15 4h4v16h-4M10 8l-4 4 4 4M6 12h10"/>',
+        'theme'        => '<path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z"/>',
+        'key'          => '<circle cx="8" cy="15" r="4"/><path d="M11 12l9-9M17 6l3 3M15 8l2 2"/>',
+        'menu'         => '<path d="M4 6h16M4 12h16M4 18h16"/>',
+        'chevron'      => '<path d="M9 6l6 6-6 6"/>',
     ];
     return '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'
         . ($paths[$name] ?? '') . '</svg>';
+}
+
+/**
+ * Applies the saved theme (or the OS preference) and the collapsed sidebar before the
+ * stylesheet paints, so neither flashes on load. Both are per device, kept in localStorage.
+ */
+function theme_head(): string
+{
+    return "<script>(function(){var p;try{p=localStorage.getItem('welldent-theme')}catch(e){}"
+        . "var d=p==='dark'||(p!=='light'&&window.matchMedia('(prefers-color-scheme: dark)').matches);"
+        . "document.documentElement.setAttribute('data-theme',d?'dark':'light');"
+        . "try{if(localStorage.getItem('welldent-sidebar')==='collapsed')document.documentElement.setAttribute('data-sidebar','collapsed')}catch(e){}})()</script>\n"
+        . '<link rel="stylesheet" href="assets/css/app.css?v=3">';
 }
 
 /** Current chair state for the sidebar card. */
@@ -68,20 +85,35 @@ function layout_start(string $title, string $active, array $opts = []): void
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title><?= e($title) ?> · WellDent+</title>
-<link rel="stylesheet" href="assets/css/app.css?v=1">
+<?= theme_head() ?>
 </head>
 <body>
 <div class="shell">
   <aside class="sidebar">
-    <a class="brand" href="index.php">
-      <span class="brand-mark">D</span>
-      <span><strong><?= e(config('clinic.name')) ?></strong><small><?= e(config('clinic.tagline')) ?></small></span>
-    </a>
+    <div class="side-top">
+      <a class="brand" href="index.php" title="<?= e(config('clinic.name')) ?>">
+        <span class="brand-mark">D</span>
+        <span class="lbl"><strong><?= e(config('clinic.name')) ?></strong><small><?= e(config('clinic.tagline')) ?></small></span>
+      </a>
+      <button type="button" class="side-toggle" data-sidebar-toggle aria-label="Collapse sidebar" title="Collapse sidebar"><?= icon('menu') ?></button>
+    </div>
     <nav class="nav">
       <?php foreach ($nav as $key => [$href, $label]): ?>
-        <a href="<?= $href ?>" class="<?= $key === $active ? 'active' : '' ?>"><?= icon($key) ?><span><?= e($label) ?></span></a>
+        <a href="<?= $href ?>" class="<?= $key === $active ? 'active' : '' ?>" title="<?= e($label) ?>"><?= icon($key) ?><span class="lbl"><?= e($label) ?></span></a>
       <?php endforeach; ?>
     </nav>
+    <details class="side-account">
+      <summary title="<?= e($user['name']) ?>">
+        <span class="avatar avatar-0"><?= e(initials($user['name'])) ?></span>
+        <span class="lbl"><strong><?= e($user['name']) ?></strong><small><?= e(ROLE_LABELS[$user['role']]) ?> · <?= e(config('clinic.city')) ?></small></span>
+        <span class="chev"><?= icon('chevron') ?></span>
+      </summary>
+      <div class="side-account-menu">
+        <button type="button" data-theme-toggle title="Theme"><?= icon('theme') ?><span class="lbl">Theme: <span data-theme-label>System</span></span></button>
+        <a href="account.php" title="Change password"><?= icon('key') ?><span class="lbl">Change password</span></a>
+        <a href="logout.php" title="Sign out"><?= icon('logout') ?><span class="lbl">Sign out</span></a>
+      </div>
+    </details>
     <div class="chair-card">
       <small>Chair status</small>
       <strong><?= e($chairState) ?></strong>
@@ -96,16 +128,6 @@ function layout_start(string $title, string $active, array $opts = []): void
       </div>
       <div class="head-actions">
         <?= $opts['action'] ?? '' ?>
-        <details class="user-menu">
-          <summary>
-            <span class="avatar avatar-0"><?= e(initials($user['name'])) ?></span>
-            <span class="user-meta"><strong><?= e($user['name']) ?></strong><small><?= e(ROLE_LABELS[$user['role']]) ?> · <?= e(config('clinic.city')) ?></small></span>
-          </summary>
-          <div class="menu">
-            <a href="account.php">Change password</a>
-            <a href="logout.php"><?= icon('logout') ?> Sign out</a>
-          </div>
-        </details>
       </div>
     </header>
     <?php foreach (take_flashes() as $f): ?>
@@ -119,7 +141,7 @@ function layout_end(): void
     ?>
   </main>
 </div>
-<script src="assets/js/app.js?v=1"></script>
+<script src="assets/js/app.js?v=3"></script>
 </body>
 </html>
 <?php
