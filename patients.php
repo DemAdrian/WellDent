@@ -32,10 +32,11 @@ if ($filter === 'balance') {
 $whereSql = 'WHERE ' . implode(' AND ', $where);
 
 $total = (int) q_val('SELECT COUNT(*) FROM patients p JOIN ' . BALANCES . " b ON b.patient_id = p.id $whereSql", $params);
-$patients = q_all('SELECT p.*, b.balance, b.charged,
+$patients = q_all('SELECT p.*, b.balance, b.charged, u.name AS added_by,
         (SELECT MIN(a.starts_at) FROM appointments a WHERE a.patient_id = p.id AND a.starts_at >= CURDATE()
             AND a.status NOT IN (\'cancelled\',\'no_show\',\'completed\')) AS next_appt
-    FROM patients p JOIN ' . BALANCES . " b ON b.patient_id = p.id $whereSql
+    FROM patients p JOIN ' . BALANCES . " b ON b.patient_id = p.id
+    LEFT JOIN users u ON u.id = p.created_by $whereSql
     ORDER BY p.full_name LIMIT $perPage OFFSET " . (($page - 1) * $perPage), $params);
 $pages = max(1, (int) ceil($total / $perPage));
 
@@ -76,7 +77,7 @@ layout_start('Patients', 'patients', [
 <section class="card">
   <div class="table-wrap">
     <table>
-      <thead><tr><th>Patient</th><th>Care type</th><th>Next appointment</th><th>Balance</th><th>Record status</th><th></th></tr></thead>
+      <thead><tr><th>Patient</th><th>Care type</th><th>Next appointment</th><th>Balance</th><th>Record status</th><th>Added by</th><th></th></tr></thead>
       <tbody>
         <?php foreach ($patients as $i => $p): ?>
           <tr>
@@ -90,11 +91,12 @@ layout_start('Patients', 'patients', [
               <?php else: ?><span class="muted">—</span><?php endif; ?>
             </td>
             <td><?= pill($p['status']) ?></td>
+            <td><?= $p['added_by'] ? e($p['added_by']) : '<span class="muted">—</span>' ?><br><small class="muted"><?= e(fmt_date($p['created_at'], 'M j, Y')) ?></small></td>
             <td class="num"><a href="patient.php?id=<?= $p['id'] ?>" style="font-weight:600">Open →</a></td>
           </tr>
         <?php endforeach; ?>
         <?php if (!$patients): ?>
-          <tr><td colspan="6" class="empty"><?= $search !== '' ? 'No patients match “' . e($search) . '”.' : 'No patients yet.' ?> <a href="patient_form.php">Add a patient</a></td></tr>
+          <tr><td colspan="7" class="empty"><?= $search !== '' ? 'No patients match “' . e($search) . '”.' : 'No patients yet.' ?> <a href="patient_form.php">Add a patient</a></td></tr>
         <?php endif; ?>
       </tbody>
     </table>
