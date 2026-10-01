@@ -46,6 +46,7 @@ if (is_post()) {
             if ((int) input('id') === (int) $me['id']) {
                 bind_session_to_password((int) $me['id']);
             }
+            clear_failed_logins((string) q_val('SELECT username FROM users WHERE id = ?', [(int) input('id')])); // also lifts a sign-in lockout
             log_activity('user_password_reset', 'user', (int) input('id'));
             flash('success', 'Password reset and their other sessions signed out. Share it with the user privately.');
         }

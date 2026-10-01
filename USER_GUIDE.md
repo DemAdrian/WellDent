@@ -22,7 +22,7 @@ Open the app in a browser, sign in with the username and password your administr
    - On the clinic laptop: http://localhost/GitHub/WellDent/
    - On a phone: connect to the clinic Wi-Fi, then open the address shown in **Settings → Phone access** (for example http://192.168.1.10/GitHub/WellDent/). Ask an administrator for it.
 2. Enter your **Username** and **Password**, then tap **Sign in**.
-3. Five wrong attempts in a row lock sign-in for 60 seconds. Wait, then try again.
+3. Five wrong passwords within 15 minutes lock that account for up to 15 minutes; the message says how long. If you can't wait, ask an administrator to reset your password (Settings → Reset password), which also lifts the lock.
 4. To change your password, click your name in the top-right corner and choose **Change password**. New passwords need at least 8 characters.
 5. When you finish, click your name and choose **Sign out**, especially on a shared laptop.
 

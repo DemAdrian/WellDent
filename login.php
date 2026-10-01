@@ -13,23 +13,30 @@ if (current_user()) {
 }
 
 $error = '';
-$lockedUntil = $_SESSION['login_locked_until'] ?? 0;
+
+function lockout_message(int $seconds): string
+{
+    $minutes = (int) ceil($seconds / 60);
+    return 'Too many failed sign-in attempts. Try again in ' . ($minutes <= 1 ? 'a minute' : "$minutes minutes")
+        . ', or ask an administrator to reset your password.';
+}
 
 if (is_post()) {
     verify_csrf();
-    if ($lockedUntil > time()) {
-        $error = 'Too many attempts. Try again in ' . ($lockedUntil - time()) . ' seconds.';
-    } elseif (attempt_login(input('username'), (string) ($_POST['password'] ?? ''))) {
-        unset($_SESSION['login_attempts'], $_SESSION['login_locked_until']);
-        log_activity('login');
+    $username = input('username');
+    $ip = client_ip();
+    // A locked username or device isn't even checked, so guessing gets nowhere while it lasts.
+    $wait = login_lockout_seconds($username, $ip);
+    if ($wait > 0) {
+        $error = lockout_message($wait);
+    } elseif (attempt_login($username, (string) ($_POST['password'] ?? ''))) {
+        clear_failed_logins($username, $ip);
+        log_activity('login', null, null, null, (int) $_SESSION['user_id']);
         redirect('index.php');
     } else {
-        $_SESSION['login_attempts'] = ($_SESSION['login_attempts'] ?? 0) + 1;
-        if ($_SESSION['login_attempts'] >= 5) {
-            $_SESSION['login_locked_until'] = time() + 60;
-            $_SESSION['login_attempts'] = 0;
-        }
-        $error = 'Incorrect username or password.';
+        record_failed_login($username, $ip);
+        $wait = login_lockout_seconds($username, $ip);
+        $error = $wait > 0 ? lockout_message($wait) : 'Incorrect username or password.';
     }
 }
 ?>

@@ -95,7 +95,7 @@ storage/         outbox.log (test-mode messages); not web-accessible
 
 ## Security notes
 
-- Passwords are hashed with `password_hash`. Logins lock for 60 seconds after 5 failed attempts.
+- Passwords are hashed with `password_hash`. Sign-in locks for up to 15 minutes after 5 wrong passwords for one username, or 10 failed attempts from one device, within 15 minutes. Failures are counted in the database (`login_attempts`), so a new session doesn't reset them. An admin password reset lifts the lock, and each lockout appears in the activity log.
 - Every form carries a CSRF token, and all queries use prepared statements.
 - Apache (`.htaccess`) blocks web access to `config/`, `includes/`, `database/`, `cron/` and `storage/`, hidden files such as `.git`, Markdown/SQL/log files, and folder listings. These rules need `AllowOverride All` for the WellDent folder (XAMPP's default for `htdocs`).
 - PHP errors are logged to `storage/php-errors.log` and never shown on screen. Set `'security' => ['debug' => true]` in `config/config.local.php` while developing to see them.

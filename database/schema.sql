@@ -183,3 +183,13 @@ CREATE TABLE IF NOT EXISTS activity_log (
     INDEX idx_log_time (created_at),
     FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE SET NULL
 ) ENGINE=InnoDB;
+
+-- Failed sign-ins, for lockouts that survive a new session (see includes/auth.php).
+CREATE TABLE IF NOT EXISTS login_attempts (
+    id           INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    username     VARCHAR(60) NOT NULL,
+    ip           VARCHAR(45) NOT NULL,
+    attempted_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_attempts_user (username, attempted_at),
+    INDEX idx_attempts_ip (ip, attempted_at)
+) ENGINE=InnoDB;

@@ -85,6 +85,77 @@ function require_perm(string $permission): void
     }
 }
 
+/*
+ * Sign-in throttling. Failures are counted in the database, per username (from any device) and
+ * per device (any username), so clearing cookies or opening a new session doesn't reset them.
+ */
+const LOGIN_WINDOW_MINUTES = 15;
+const LOGIN_MAX_PER_USERNAME = 5;
+const LOGIN_MAX_PER_DEVICE = 10;
+
+/** Creates the attempts table on installs that predate it. */
+function ensure_login_attempts_table(): void
+{
+    static $done = false;
+    if (!$done) {
+        q('CREATE TABLE IF NOT EXISTS login_attempts (
+            id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+            username VARCHAR(60) NOT NULL,
+            ip VARCHAR(45) NOT NULL,
+            attempted_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            INDEX idx_attempts_user (username, attempted_at),
+            INDEX idx_attempts_ip (ip, attempted_at)
+        ) ENGINE=InnoDB');
+        $done = true;
+    }
+}
+
+function client_ip(): string
+{
+    return (string) ($_SERVER['REMOTE_ADDR'] ?? 'unknown'); // not X-Forwarded-For: the browser can fake that
+}
+
+function login_key(string $username): string
+{
+    return mb_substr(mb_strtolower(trim($username)), 0, 60);
+}
+
+/** Seconds until this username and device may try again; 0 when sign-in is allowed. */
+function login_lockout_seconds(string $username, string $ip): int
+{
+    ensure_login_attempts_table();
+    $wait = 0;
+    // Locked while the window holds the maximum number of failures; it opens once the oldest of them ages out.
+    foreach ([['username', login_key($username), LOGIN_MAX_PER_USERNAME], ['ip', $ip, LOGIN_MAX_PER_DEVICE]] as [$col, $value, $max]) {
+        $seconds = q_val("SELECT TIMESTAMPDIFF(SECOND, NOW(), attempted_at + INTERVAL " . LOGIN_WINDOW_MINUTES . " MINUTE)
+            FROM login_attempts WHERE $col = ? AND attempted_at > NOW() - INTERVAL " . LOGIN_WINDOW_MINUTES . " MINUTE
+            ORDER BY attempted_at DESC, id DESC LIMIT 1 OFFSET " . ($max - 1), [$value]);
+        $wait = max($wait, (int) $seconds);
+    }
+    return $wait;
+}
+
+function record_failed_login(string $username, string $ip): void
+{
+    ensure_login_attempts_table();
+    q('INSERT INTO login_attempts (username, ip) VALUES (?, ?)', [login_key($username), $ip]);
+    q('DELETE FROM login_attempts WHERE attempted_at < NOW() - INTERVAL 1 DAY');
+    if (login_lockout_seconds($username, $ip) > 0) {
+        log_activity('login_locked', null, null, 'Sign-in locked for "' . login_key($username) . '" from ' . $ip);
+    }
+}
+
+/** Forgets failures for a username: all of them, or only those from one device. */
+function clear_failed_logins(string $username, ?string $ip = null): void
+{
+    ensure_login_attempts_table();
+    if ($ip === null) {
+        q('DELETE FROM login_attempts WHERE username = ?', [login_key($username)]);
+    } else {
+        q('DELETE FROM login_attempts WHERE username = ? AND ip = ?', [login_key($username), $ip]);
+    }
+}
+
 function attempt_login(string $username, string $password): bool
 {
     $user = q_row('SELECT id, password_hash FROM users WHERE username = ? AND is_active = 1', [$username]);

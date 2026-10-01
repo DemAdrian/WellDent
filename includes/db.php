@@ -54,8 +54,8 @@ const BALANCES = "(SELECT p0.id AS patient_id,
     LEFT JOIN (SELECT patient_id, SUM(amount) AS charged FROM treatments GROUP BY patient_id) t0 ON t0.patient_id = p0.id
     LEFT JOIN (SELECT patient_id, SUM(amount) AS paid FROM payments GROUP BY patient_id) y0 ON y0.patient_id = p0.id)";
 
-function log_activity(string $action, ?string $entity = null, ?int $entityId = null, ?string $details = null): void
+function log_activity(string $action, ?string $entity = null, ?int $entityId = null, ?string $details = null, ?int $userId = null): void
 {
     q('INSERT INTO activity_log (user_id, action, entity, entity_id, details) VALUES (?, ?, ?, ?, ?)',
-        [current_user()['id'] ?? null, $action, $entity, $entityId, $details !== null ? mb_substr($details, 0, 255) : null]);
+        [$userId ?? current_user()['id'] ?? null, $action, $entity, $entityId, $details !== null ? mb_substr($details, 0, 255) : null]);
 }
