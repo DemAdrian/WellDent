@@ -57,14 +57,24 @@
     var label = document.querySelector('[data-theme-label]');
     if (label) label.textContent = pref.charAt(0).toUpperCase() + pref.slice(1);
   }
+  var reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
+  var themeFadeTimer;
+  function switchTheme(pref) {
+    // Briefly enable colour transitions everywhere so the switch cross-fades instead of flashing.
+    var root = document.documentElement;
+    root.classList.add('theme-switching');
+    applyTheme(pref);
+    clearTimeout(themeFadeTimer);
+    themeFadeTimer = setTimeout(function () { root.classList.remove('theme-switching'); }, 350);
+  }
   var themePref = savedTheme();
   applyTheme(themePref);
-  systemDark.addEventListener('change', function () { applyTheme(themePref); });
+  systemDark.addEventListener('change', function () { switchTheme(themePref); });
   document.addEventListener('click', function (e) {
     if (!e.target.closest('[data-theme-toggle]')) return;
     themePref = { system: 'dark', dark: 'light', light: 'system' }[themePref] || 'system';
     try { localStorage.setItem(THEME_KEY, themePref); } catch (err) { /* private mode: applies to this page only */ }
-    applyTheme(themePref);
+    switchTheme(themePref);
   });
 
   // ---------- collapsible sidebar (icons only), stored per device ----------
@@ -79,12 +89,33 @@
   }
   syncSideToggle();
   if (sideToggle) {
+    // Choreographed so nothing snaps: collapsing fades the labels out, then narrows the sidebar;
+    // expanding widens it first, then fades the labels back in. Timings match the CSS (.15s / .28s).
+    var FADE_MS = 150, RESIZE_MS = 280, sideTimers = [];
     sideToggle.addEventListener('click', function () {
       var root = document.documentElement;
       var collapse = root.getAttribute('data-sidebar') !== 'collapsed';
-      if (collapse) root.setAttribute('data-sidebar', 'collapsed'); else root.removeAttribute('data-sidebar');
+      var setCollapsed = function () {
+        if (collapse) root.setAttribute('data-sidebar', 'collapsed'); else root.removeAttribute('data-sidebar');
+        syncSideToggle();
+      };
       try { localStorage.setItem('welldent-sidebar', collapse ? 'collapsed' : 'expanded'); } catch (err) { /* this page only */ }
-      syncSideToggle();
+      sideTimers.forEach(clearTimeout);
+      sideTimers = [];
+      if (reduceMotion.matches) {
+        root.removeAttribute('data-sidebar-fade');
+        setCollapsed();
+        return;
+      }
+      root.setAttribute('data-sidebar-fade', '');
+      var unfade = function () { root.removeAttribute('data-sidebar-fade'); };
+      if (collapse) {
+        sideTimers.push(setTimeout(setCollapsed, FADE_MS));
+        sideTimers.push(setTimeout(unfade, FADE_MS + RESIZE_MS));
+      } else {
+        setCollapsed();
+        sideTimers.push(setTimeout(unfade, RESIZE_MS));
+      }
     });
   }
 

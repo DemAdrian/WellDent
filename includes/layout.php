@@ -30,7 +30,7 @@ function theme_head(): string
         . "var d=p==='dark'||(p!=='light'&&window.matchMedia('(prefers-color-scheme: dark)').matches);"
         . "document.documentElement.setAttribute('data-theme',d?'dark':'light');"
         . "try{if(localStorage.getItem('welldent-sidebar')==='collapsed')document.documentElement.setAttribute('data-sidebar','collapsed')}catch(e){}})()</script>\n"
-        . '<link rel="stylesheet" href="assets/css/app.css?v=3">';
+        . '<link rel="stylesheet" href="assets/css/app.css?v=4">';
 }
 
 /** Current chair state for the sidebar card. */
@@ -141,7 +141,7 @@ function layout_end(): void
     ?>
   </main>
 </div>
-<script src="assets/js/app.js?v=3"></script>
+<script src="assets/js/app.js?v=4"></script>
 </body>
 </html>
 <?php

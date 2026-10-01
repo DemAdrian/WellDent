@@ -107,53 +107,69 @@ p { margin: 0; }
 .icon { width: 20px; height: 20px; flex: none; }
 
 /* ---------- shell ---------- */
-.shell { display: grid; grid-template-columns: 264px 1fr; min-height: 100vh; transition: grid-template-columns .2s ease; }
-.sidebar { background: var(--side); color: var(--side-ink); padding: 24px 20px; display: flex; flex-direction: column; gap: 24px; position: sticky; top: 0; height: 100vh; overflow-y: auto; scrollbar-width: none; }
-.side-top { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
-.side-toggle { flex: none; width: 32px; height: 32px; border-radius: 10px; border: 0; background: none; color: var(--side-ink); display: grid; place-items: center; cursor: pointer; }
+.shell { --ease: cubic-bezier(.4, 0, .2, 1); display: grid; grid-template-columns: 264px 1fr; min-height: 100vh; transition: grid-template-columns .28s var(--ease); }
+.sidebar { background: var(--side); color: var(--side-ink); padding: 24px 20px; display: flex; flex-direction: column; gap: 24px; position: sticky; top: 0; height: 100vh; overflow-x: hidden; overflow-y: auto; scrollbar-width: none; transition: padding .28s var(--ease); }
+.side-top { position: relative; display: flex; align-items: center; justify-content: space-between; gap: 6px; min-height: 56px; transition: padding .28s var(--ease); }
+.side-toggle { flex: none; width: 32px; height: 32px; border-radius: 10px; border: 0; background: none; color: var(--side-ink); display: grid; place-items: center; cursor: pointer; transition: background-color .15s, opacity .15s; }
 .side-toggle:hover { background: rgba(255, 255, 255, .08); }
 .brand { display: flex; gap: 12px; align-items: center; color: #fff; min-width: 0; }
-.side-top .brand-mark { width: 42px; height: 42px; font-size: 20px; }
+.side-top .brand-mark { width: 42px; height: 42px; font-size: 20px; transition: opacity .15s; }
+.side-top .brand .lbl { flex: none; width: 132px; } /* fixed so the text never rewraps while the sidebar animates */
 .side-top .brand strong { font-size: 16px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .brand:hover { text-decoration: none; }
 .brand-mark { width: 46px; height: 46px; border-radius: 12px; background: var(--brand-mark-bg); color: var(--brand-mark-ink); display: grid; place-items: center; font-weight: 700; font-size: 22px; flex: none; }
 .brand strong { display: block; font-size: 18px; font-weight: 600; }
 .brand small { display: block; font-size: 11px; letter-spacing: .06em; text-transform: uppercase; opacity: .8; }
 .nav { display: flex; flex-direction: column; gap: 6px; }
-.nav a { display: flex; flex-direction: column; gap: 8px; padding: 14px 16px; border-radius: 14px; color: var(--side-ink); }
+.nav a { display: flex; flex-direction: column; gap: 8px; padding: 14px 16px; border-radius: 14px; color: var(--side-ink); transition: background-color .15s, color .15s, gap .28s var(--ease), padding .28s var(--ease); }
+.nav a .lbl { display: block; max-height: 24px; overflow: hidden; white-space: nowrap; transition: opacity .15s, max-height .28s var(--ease); }
 .nav a:hover { background: rgba(255, 255, 255, .06); text-decoration: none; }
 .nav a.active { background: var(--side-2); color: #fff; font-weight: 600; }
 /* Account section: clicking the name drops the options open inside the sidebar. */
 .side-account { border-top: 1px solid rgba(255, 255, 255, .08); padding-top: 16px; }
-.side-account summary { list-style: none; display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 14px; cursor: pointer; color: var(--side-ink); }
+.side-account summary { list-style: none; display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 14px; cursor: pointer; color: var(--side-ink); transition: background-color .15s; }
 .side-account summary::-webkit-details-marker { display: none; }
 .side-account summary:hover { background: rgba(255, 255, 255, .06); }
 .side-account[open] summary { background: var(--side-2); }
 .side-account summary .lbl { flex: 1; min-width: 0; }
 .side-account summary strong { display: block; color: #fff; font-size: 14px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .side-account summary small { display: block; font-size: 12px; opacity: .75; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.side-account .chev { display: grid; transition: transform .15s; }
+.side-account .chev { display: grid; transition: transform .2s var(--ease), opacity .15s; }
 .side-account .chev .icon { width: 18px; height: 18px; }
 .side-account[open] .chev { transform: rotate(90deg); }
 .side-account-menu { display: flex; flex-direction: column; gap: 2px; padding-top: 6px; }
-.side-account-menu a, .side-account-menu button { display: flex; align-items: center; gap: 14px; width: 100%; padding: 10px 12px 10px 16px; border: 0; border-radius: 12px; background: none; color: var(--side-ink); font: inherit; font-size: 14px; text-align: left; cursor: pointer; }
+.side-account-menu a, .side-account-menu button { display: flex; align-items: center; gap: 14px; width: 100%; padding: 10px 12px 10px 16px; border: 0; border-radius: 12px; background: none; color: var(--side-ink); font: inherit; font-size: 14px; text-align: left; cursor: pointer; transition: background-color .15s, color .15s; }
+.side-account-menu .lbl { white-space: nowrap; }
+.sidebar .lbl, .chair-card { transition: opacity .15s; }
+/* While the sidebar resizes, its text is faded out (see app.js) so nothing visibly reflows. */
+:root[data-sidebar-fade] .sidebar .lbl,
+:root[data-sidebar-fade] .side-account .chev,
+:root[data-sidebar-fade] .side-toggle,
+:root[data-sidebar-fade] .chair-card { opacity: 0; }
 .side-account-menu a:hover, .side-account-menu button:hover { background: rgba(255, 255, 255, .06); text-decoration: none; color: #fff; }
 
 /* Collapsed sidebar: icons only (desktop). Toggled by the button beside the logo. */
 @media (min-width: 861px) {
   :root[data-sidebar="collapsed"] .shell { grid-template-columns: 88px 1fr; }
   :root[data-sidebar="collapsed"] .sidebar { padding: 24px 14px; }
-  :root[data-sidebar="collapsed"] .side-top { flex-direction: column; gap: 14px; }
-  :root[data-sidebar="collapsed"] .sidebar .lbl,
+  /* Same height as expanded so nothing below jumps; the ☰ sits over the logo and shows on hover. */
+  :root[data-sidebar="collapsed"] .side-top { padding-left: 9px; }
+  :root[data-sidebar="collapsed"] .side-toggle { position: absolute; left: 9px; top: 50%; width: 42px; height: 42px; margin-top: -21px; opacity: 0; background: var(--side-2); border-radius: 12px; }
+  :root[data-sidebar="collapsed"]:not([data-sidebar-fade]) .side-top:hover .side-toggle,
+  :root[data-sidebar="collapsed"]:not([data-sidebar-fade]) .side-toggle:focus-visible { opacity: 1; }
+  :root[data-sidebar="collapsed"]:not([data-sidebar-fade]) .side-top:hover .brand-mark { opacity: 0; }
+  :root[data-sidebar="collapsed"] .side-top .lbl,
+  :root[data-sidebar="collapsed"] .side-account .lbl,
   :root[data-sidebar="collapsed"] .side-account .chev,
   :root[data-sidebar="collapsed"] .chair-card { display: none; }
-  :root[data-sidebar="collapsed"] .nav a { align-items: center; padding: 14px 0; }
+  :root[data-sidebar="collapsed"] .nav a { gap: 0; padding: 14px 20px; }
+  :root[data-sidebar="collapsed"] .nav a .lbl { max-height: 0; opacity: 0; }
   :root[data-sidebar="collapsed"] .side-account summary { justify-content: center; padding: 8px 0; }
   :root[data-sidebar="collapsed"] .side-account-menu a,
   :root[data-sidebar="collapsed"] .side-account-menu button { justify-content: center; padding: 12px 0; }
 }
 
-.chair-card { margin-top: auto; background: var(--side-2); border-radius: 14px; padding: 16px; display: flex; flex-direction: column; gap: 4px; }
+.chair-card { margin-top: auto; min-width: 224px; background: var(--side-2); border-radius: 14px; padding: 16px; display: flex; flex-direction: column; gap: 4px; }
 .chair-card small { font-size: 11px; letter-spacing: .06em; text-transform: uppercase; font-weight: 600; opacity: .85; }
 .chair-card strong { color: #fff; }
 .chair-card span { font-size: 13px; opacity: .8; }
@@ -371,6 +387,50 @@ dialog .close { background: none; border: 0; font-size: 22px; cursor: pointer; c
 .auth .brand small { color: var(--muted); }
 
 /* ---------- responsive: phones on the clinic Wi-Fi ---------- */
+/* ---------- motion ---------- */
+/* Cross-fade between pages (Chromium/Edge, Safari 18.2+); the sidebar stays put instead of blinking. */
+@view-transition { navigation: auto; }
+.sidebar { view-transition-name: sidebar; }
+::view-transition-old(root), ::view-transition-new(root) { animation-duration: .2s; }
+
+/* Page content settles in on load, top to bottom. "backwards" so no transform lingers afterwards
+   (a lingering transform would trap dropdown menus under the next card). */
+@keyframes rise { from { opacity: 0; transform: translateY(10px); } }
+@keyframes fade-in { from { opacity: 0; } }
+@keyframes drop { from { opacity: 0; transform: translateY(-6px); } }
+@keyframes pop { from { opacity: 0; transform: translateY(8px) scale(.98); } }
+.main > * { animation: rise .4s var(--ease, ease) backwards; }
+.main > :nth-child(2) { animation-delay: .04s; }
+.main > :nth-child(3) { animation-delay: .08s; }
+.main > :nth-child(4) { animation-delay: .12s; }
+.main > :nth-child(5) { animation-delay: .16s; }
+.main > :nth-child(n+6) { animation-delay: .2s; }
+.auth .card { animation: pop .4s cubic-bezier(.4, 0, .2, 1) backwards; }
+
+/* Small feedback on everything you can hover or press. */
+.btn, .link-btn, .tabs a, .menu a, .week-item, .sched-row, a.card, .pill { transition: background-color .15s, border-color .15s, color .15s, box-shadow .2s, transform .15s; }
+.btn:active, .side-toggle:active { transform: scale(.97); }
+a.card:hover, .week-item:hover { transform: translateY(-1px); }
+input, select, textarea { transition: border-color .15s, background-color .15s, outline-color .15s; }
+.tooth .body { transition: transform .12s, fill .15s, stroke-width .15s; }
+
+/* Menus, dialogs and messages ease in instead of appearing abruptly. */
+.side-account[open] .side-account-menu, .user-menu[open] .menu { animation: drop .2s cubic-bezier(.4, 0, .2, 1); }
+dialog[open] { animation: pop .22s cubic-bezier(.4, 0, .2, 1); }
+dialog[open]::backdrop { animation: fade-in .22s ease; }
+.flash { animation: drop .3s cubic-bezier(.4, 0, .2, 1) backwards; }
+
+/* Switching light/dark cross-fades the colours (class added briefly by app.js). */
+.theme-switching, .theme-switching *, .theme-switching *::before, .theme-switching *::after {
+  transition: background-color .3s ease, color .3s ease, border-color .3s ease, fill .3s ease, stroke .3s ease !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after, ::view-transition-group(*), ::view-transition-old(*), ::view-transition-new(*) {
+    animation-duration: .01ms !important; animation-delay: 0s !important; transition-duration: .01ms !important;
+  }
+}
+
 @media (max-width: 1200px) {
   .layout-side { grid-template-columns: minmax(0, 1fr); }
   .grid-4 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
