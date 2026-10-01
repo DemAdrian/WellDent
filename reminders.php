@@ -22,12 +22,16 @@ if (is_post()) {
     } elseif ($action === 'create') {
         $patient = q_row('SELECT * FROM patients WHERE id = ?', [(int) input('patient_id')]);
         $channel = input('channel') === 'email' ? 'email' : 'sms';
-        $recipient = $patient ? ($channel === 'sms' ? $patient['phone'] : $patient['email']) : null;
+        $recipient = !$patient ? null : ($channel === 'sms'
+            ? (is_ph_mobile($patient['phone']) ? normalize_ph_phone($patient['phone']) : null)
+            : $patient['email']);
         $sendAt = str_replace('T', ' ', input('send_at'));
         if (!$patient || !$recipient) {
-            flash('error', 'That patient has no ' . ($channel === 'sms' ? 'phone number' : 'email address') . ' on file.');
+            flash('error', 'That patient has no ' . ($channel === 'sms' ? 'mobile number' : 'email address') . ' on file.');
         } elseif (input('message') === '' || strtotime($sendAt) === false) {
             flash('error', 'Enter a message and a send time.');
+        } elseif (mb_strlen(input('message')) > 480) {
+            flash('error', 'Keep the message to 480 characters (3 SMS) or less.');
         } else {
             q('INSERT INTO reminders (patient_id, channel, recipient, message, send_at) VALUES (?, ?, ?, ?, ?)',
                 [$patient['id'], $channel, $recipient, input('message'), date('Y-m-d H:i:s', strtotime($sendAt))]);

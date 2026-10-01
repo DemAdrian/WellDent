@@ -18,11 +18,12 @@ function reminder_message(array $appt): string
  */
 function schedule_appointment_reminders(int $appointmentId): void
 {
-    q("UPDATE reminders SET status = 'cancelled' WHERE appointment_id = ? AND status = 'scheduled'", [$appointmentId]);
+    // Failed ones go too, so nobody retries a reminder for an old time.
+    q("UPDATE reminders SET status = 'cancelled' WHERE appointment_id = ? AND status IN ('scheduled','failed')", [$appointmentId]);
 
-    $appt = q_row('SELECT a.*, p.full_name, p.phone, p.email FROM appointments a
+    $appt = q_row('SELECT a.*, p.full_name, p.phone, p.email, p.status AS patient_status FROM appointments a
         JOIN patients p ON p.id = a.patient_id WHERE a.id = ?', [$appointmentId]);
-    if (!$appt || in_array($appt['status'], ['cancelled', 'no_show', 'completed'], true)) {
+    if (!$appt || $appt['patient_status'] === 'archived' || in_array($appt['status'], ['cancelled', 'no_show', 'completed'], true)) {
         return;
     }
 
@@ -35,12 +36,27 @@ function schedule_appointment_reminders(int $appointmentId): void
 
     $message = reminder_message($appt);
     $channels = array_filter([
-        'sms'   => $appt['phone'] ?: null,
+        'sms'   => is_ph_mobile($appt['phone']) ? normalize_ph_phone($appt['phone']) : null, // landlines can't get SMS
         'email' => ($appt['email'] && filter_var($appt['email'], FILTER_VALIDATE_EMAIL)) ? $appt['email'] : null,
     ]);
     foreach ($channels as $channel => $recipient) {
+        // The patient already got this exact reminder (e.g. only the status changed afterwards).
+        if (q_val("SELECT 1 FROM reminders WHERE appointment_id = ? AND channel = ? AND recipient = ? AND message = ? AND status = 'sent'",
+            [$appointmentId, $channel, $recipient, $message])) {
+            continue;
+        }
         q('INSERT INTO reminders (patient_id, appointment_id, channel, recipient, message, send_at) VALUES (?, ?, ?, ?, ?, ?)',
             [$appt['patient_id'], $appointmentId, $channel, $recipient, $message, date('Y-m-d H:i:s', $sendAt)]);
+    }
+}
+
+/** Re-plans reminders for a patient's upcoming appointments, e.g. after their phone or email changed. */
+function reschedule_patient_reminders(int $patientId): void
+{
+    $upcoming = q_all("SELECT id FROM appointments WHERE patient_id = ? AND starts_at > NOW()
+        AND status NOT IN ('cancelled','no_show','completed')", [$patientId]);
+    foreach ($upcoming as $a) {
+        schedule_appointment_reminders((int) $a['id']);
     }
 }
 
@@ -53,16 +69,25 @@ function process_due_reminders(?int $onlyId = null): array
         $sql .= ' AND id = ?';
         $params[] = $onlyId;
     }
+    // Rows are marked sent before sending; don't let a closed tab or the web time limit
+    // stop the batch halfway and leave a claimed reminder that never went out.
+    ignore_user_abort(true);
+    set_time_limit(0);
+
     $sent = $failed = 0;
     foreach (q_all($sql . ' ORDER BY send_at LIMIT 100', $params) as $r) {
+        // Claim the row before sending, so a scheduled run and a "Send due now" click can't both send it.
+        $claimed = q("UPDATE reminders SET status = 'sent', sent_at = NOW(), error = NULL WHERE id = ? AND status = 'scheduled'", [$r['id']])->rowCount();
+        if ($claimed === 0) {
+            continue;
+        }
         [$ok, $error] = $r['channel'] === 'sms'
             ? send_sms($r['recipient'], $r['message'])
             : send_email($r['recipient'], config('clinic.name') . ' appointment reminder', $r['message']);
         if ($ok) {
-            q("UPDATE reminders SET status = 'sent', sent_at = NOW(), error = NULL WHERE id = ?", [$r['id']]);
             $sent++;
         } else {
-            q("UPDATE reminders SET status = 'failed', error = ? WHERE id = ?", [mb_substr($error, 0, 255), $r['id']]);
+            q("UPDATE reminders SET status = 'failed', sent_at = NULL, error = ? WHERE id = ?", [mb_substr($error, 0, 255), $r['id']]);
             $failed++;
         }
     }
@@ -85,7 +110,7 @@ function send_sms(string $to, string $message): array
     if (!function_exists('curl_init')) {
         return [false, 'PHP curl extension is not enabled'];
     }
-    $fields = ['apikey' => config('sms.api_key'), 'number' => preg_replace('/\D+/', '', $to), 'message' => $message];
+    $fields = ['apikey' => config('sms.api_key'), 'number' => normalize_ph_phone($to) ?? preg_replace('/\D+/', '', $to), 'message' => $message];
     if (config('sms.sender_name')) {
         $fields['sendername'] = config('sms.sender_name');
     }
@@ -99,7 +124,6 @@ function send_sms(string $to, string $message): array
     $body = curl_exec($ch);
     $status = curl_getinfo($ch, CURLINFO_HTTP_CODE);
     $error = curl_error($ch);
-    curl_close($ch);
     if ($body === false) {
         return [false, 'SMS request failed: ' . $error];
     }

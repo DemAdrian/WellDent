@@ -19,6 +19,13 @@ function icon(string $name): string
 /** Current chair state for the sidebar card. */
 function chair_status(): array
 {
+    $chairs = (int) config('clinic.chairs');
+    if ($chairs > 1) {
+        $busy = (int) q_val("SELECT COUNT(DISTINCT chair) FROM appointments WHERE DATE(starts_at) = CURDATE() AND status = 'in_treatment'");
+        $next = q_val("SELECT MIN(starts_at) FROM appointments WHERE starts_at > NOW() AND DATE(starts_at) = CURDATE() AND status IN ('pending','confirmed')");
+        return ["Chairs · $busy of $chairs in use", $next ? 'Next patient ' . fmt_time($next) : 'No more patients today'];
+    }
+
     $current = q_row("SELECT a.starts_at, a.duration_min, a.status FROM appointments a
         WHERE DATE(a.starts_at) = CURDATE() AND a.status IN ('in_treatment','arrived')
         ORDER BY FIELD(a.status, 'in_treatment', 'arrived'), a.starts_at LIMIT 1");
@@ -28,12 +35,12 @@ function chair_status(): array
 
     if ($current && $current['status'] === 'in_treatment') {
         $end = strtotime($current['starts_at']) + $current['duration_min'] * 60;
-        return ['In treatment', 'Next turnover ' . date('g:i A', $end)];
+        return ['Chair 1 · In treatment', 'Next turnover ' . date('g:i A', $end)];
     }
     if ($current) {
-        return ['Patient waiting', 'Scheduled ' . fmt_time($current['starts_at'])];
+        return ['Chair 1 · Patient waiting', 'Scheduled ' . fmt_time($current['starts_at'])];
     }
-    return ['Available', $next ? 'Next patient ' . fmt_time($next['starts_at']) : 'No more patients today'];
+    return ['Chair 1 · Available', $next ? 'Next patient ' . fmt_time($next['starts_at']) : 'No more patients today'];
 }
 
 /**
@@ -77,7 +84,7 @@ function layout_start(string $title, string $active, array $opts = []): void
     </nav>
     <div class="chair-card">
       <small>Chair status</small>
-      <strong>Chair 1 · <?= e($chairState) ?></strong>
+      <strong><?= e($chairState) ?></strong>
       <span><?= e($chairNote) ?></span>
     </div>
   </aside>

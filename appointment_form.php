@@ -42,40 +42,63 @@ if (is_post()) {
     $chair = max(1, min((int) config('clinic.chairs'), (int) $values['chair']));
 
     if (!q_val("SELECT 1 FROM patients WHERE id = ? AND status <> 'archived'", [(int) $values['patient_id']])) $errors[] = 'Choose a patient.';
-    if (!valid_date($values['date']) || !preg_match('/^\d{2}:\d{2}$/', $values['time'])) $errors[] = 'Enter a valid date and time.';
+    if (!valid_date($values['date']) || !preg_match('/^([01]\d|2[0-3]):[0-5]\d$/', $values['time'])) $errors[] = 'Enter a valid date and time.';
     if ($duration < 10 || $duration > 480) $errors[] = 'Duration must be between 10 and 480 minutes.';
     if ($values['procedure_name'] === '') $errors[] = 'Enter the procedure.';
     if (!isset(APPOINTMENT_STATUSES[$values['status']])) $errors[] = 'Choose a valid status.';
+    $errors = array_merge($errors, length_errors($values, ['procedure_name' => ['Procedure', 120], 'notes' => ['Notes', 2000]]));
+    if ($values['dentist_id'] !== '' && !in_array((int) $values['dentist_id'], array_map('intval', array_column(dentist_options(), 'id')), true)) {
+        $errors[] = 'Choose a valid dentist.';
+    }
 
-    $blocking = !in_array($values['status'], ['cancelled', 'no_show'], true);
-    if (!$errors && $blocking) {
-        $clash = q_row("SELECT a.starts_at, p.full_name FROM appointments a JOIN patients p ON p.id = a.patient_id
-            WHERE a.chair = ? AND a.id <> ? AND a.status NOT IN ('cancelled','no_show')
-            AND a.starts_at < ? + INTERVAL ? MINUTE AND a.starts_at + INTERVAL a.duration_min MINUTE > ?",
-            [$chair, $id, $start, $duration, $start]);
-        if ($clash) {
-            $errors[] = "Chair $chair is already booked at " . fmt_time($clash['starts_at']) . " ({$clash['full_name']}). Pick another time.";
+    // Only check timing when it changes, so older bookings can still be edited (status, notes).
+    $timingChanged = !$appt || $appt['starts_at'] !== $start || (int) $appt['duration_min'] !== $duration;
+    if (!$errors && $timingChanged) {
+        $startTs = strtotime($start);
+        $endTs = $startTs + $duration * 60;
+        $opens = strtotime($values['date'] . ' ' . config('clinic.opens'));
+        $closes = strtotime($values['date'] . ' ' . config('clinic.closes'));
+        if ($startTs === false || $startTs < time()) {
+            $errors[] = 'That time has already passed. Pick a time later than now.';
+        } elseif ($startTs < $opens || $endTs > $closes) {
+            $errors[] = 'The clinic is open ' . fmt_time(config('clinic.opens')) . '–' . fmt_time(config('clinic.closes'))
+                . '. This appointment would run ' . date('g:i A', $startTs) . '–' . date('g:i A', $endTs) . '.';
+        }
+    }
+
+    $blocking = !in_array($values['status'], NON_BLOCKING_STATUSES, true);
+    if (!$errors) {
+        try {
+            with_booking_lock(function () use (&$errors, &$id, $appt, $values, $user, $start, $duration, $chair, $blocking) {
+                if ($blocking && ($clash = appointment_clash($chair, $start, $duration, $id))) {
+                    $errors[] = "Chair $chair is already booked at " . fmt_time($clash['starts_at']) . " ({$clash['full_name']}). Pick another time.";
+                    return;
+                }
+                $params = [(int) $values['patient_id'], nullable($values['dentist_id']), $chair, $start, $duration,
+                    $values['procedure_name'], $values['status'], nullable($values['notes'])];
+                if ($appt) {
+                    q('UPDATE appointments SET patient_id = ?, dentist_id = ?, chair = ?, starts_at = ?, duration_min = ?,
+                        procedure_name = ?, status = ?, notes = ? WHERE id = ?', [...$params, $id]);
+                    log_activity('appointment_updated', 'appointment', $id, $start);
+                } else {
+                    q('INSERT INTO appointments (patient_id, dentist_id, chair, starts_at, duration_min, procedure_name, status, notes, created_by)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)', [...$params, $user['id']]);
+                    $id = (int) db()->lastInsertId();
+                    log_activity('appointment_created', 'appointment', $id, $start);
+                    if ((int) input('waitlist_id')) {
+                        q('UPDATE waitlist SET resolved_at = NOW() WHERE id = ?', [(int) input('waitlist_id')]);
+                    }
+                }
+            });
+        } catch (RuntimeException $ex) {
+            $errors[] = $ex->getMessage();
         }
     }
 
     if (!$errors) {
-        $params = [(int) $values['patient_id'], nullable($values['dentist_id']), $chair, $start, $duration,
-            $values['procedure_name'], $values['status'], nullable($values['notes'])];
-        if ($appt) {
-            q('UPDATE appointments SET patient_id = ?, dentist_id = ?, chair = ?, starts_at = ?, duration_min = ?,
-                procedure_name = ?, status = ?, notes = ? WHERE id = ?', [...$params, $id]);
-            log_activity('appointment_updated', 'appointment', $id, $start);
-        } else {
-            q('INSERT INTO appointments (patient_id, dentist_id, chair, starts_at, duration_min, procedure_name, status, notes, created_by)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)', [...$params, $user['id']]);
-            $id = (int) db()->lastInsertId();
-            log_activity('appointment_created', 'appointment', $id, $start);
-            if ((int) input('waitlist_id')) {
-                q('UPDATE waitlist SET resolved_at = NOW() WHERE id = ?', [(int) input('waitlist_id')]);
-            }
-        }
-        // Reschedule reminders only when timing or status could have changed them.
-        if (!$appt || $appt['starts_at'] !== $start || $appt['status'] !== $values['status'] || (int) $appt['patient_id'] !== (int) $values['patient_id']) {
+        // Reschedule reminders only when the message, timing or status could have changed them.
+        if (!$appt || $appt['starts_at'] !== $start || $appt['status'] !== $values['status']
+            || (int) $appt['patient_id'] !== (int) $values['patient_id'] || $appt['procedure_name'] !== $values['procedure_name']) {
             schedule_appointment_reminders($id);
         }
         flash('success', $appt ? 'Appointment updated.' : 'Appointment booked.');
@@ -111,14 +134,14 @@ layout_start($appt ? 'Reschedule appointment' : 'New appointment', 'appointments
         <select id="status" name="status"><?php foreach (APPOINTMENT_STATUSES as $k => $lbl): ?><option value="<?= $k ?>"<?= selected($k, $values['status']) ?>><?= $lbl ?></option><?php endforeach; ?></select>
       </div>
       <div class="field"><label for="date">Date *</label><input type="date" id="date" name="date" value="<?= e($values['date']) ?>" required></div>
-      <div class="field"><label for="time">Time *</label><input type="time" id="time" name="time" value="<?= e($values['time']) ?>" step="900" required></div>
+      <div class="field"><label for="time">Time *</label><input type="time" id="time" name="time" value="<?= e($values['time']) ?>" min="<?= e(config('clinic.opens')) ?>" max="<?= e(config('clinic.closes')) ?>" step="900" required></div>
       <div class="field"><label for="duration_min">Duration</label>
         <select id="duration_min" name="duration_min">
           <?php foreach ([15, 30, 45, 60, 90, 120, 180] as $m): ?><option value="<?= $m ?>"<?= selected($m, $values['duration_min']) ?>><?= $m ?> min</option><?php endforeach; ?>
         </select>
       </div>
       <div class="field"><label for="procedure_name">Procedure *</label>
-        <input type="text" id="procedure_name" name="procedure_name" value="<?= e($values['procedure_name']) ?>" list="procedures" required>
+        <input type="text" id="procedure_name" name="procedure_name" value="<?= e($values['procedure_name']) ?>" list="procedures" maxlength="120" required>
         <datalist id="procedures"><?php foreach (['Consultation', 'Cleaning', 'Adjustment', 'Filling', 'Extraction', 'Root canal', 'Crown fitting', 'Retainer fitting', 'Bracket repair', 'Whitening', 'X-ray'] as $proc): ?><option value="<?= $proc ?>"><?php endforeach; ?></datalist>
       </div>
       <div class="field"><label for="dentist_id">Dentist</label>
@@ -131,7 +154,7 @@ layout_start($appt ? 'Reschedule appointment' : 'New appointment', 'appointments
           <select id="chair" name="chair"><?php for ($c = 1; $c <= config('clinic.chairs'); $c++): ?><option value="<?= $c ?>"<?= selected($c, $values['chair']) ?>>Chair <?= $c ?></option><?php endfor; ?></select>
         </div>
       <?php else: ?><input type="hidden" name="chair" value="1"><?php endif; ?>
-      <div class="field span-all"><label for="notes">Notes</label><textarea id="notes" name="notes" placeholder="Anything the team should know"><?= e($values['notes']) ?></textarea></div>
+      <div class="field span-all"><label for="notes">Notes</label><textarea id="notes" name="notes" maxlength="2000" placeholder="Anything the team should know"><?= e($values['notes']) ?></textarea></div>
     </div>
     <div class="row" style="margin-top:20px">
       <button class="btn btn-primary" type="submit"><?= $appt ? 'Save changes' : 'Book appointment' ?></button>

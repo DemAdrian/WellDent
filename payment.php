@@ -19,7 +19,8 @@ if (is_post()) {
     }
     $patientId = (int) $values['patient_id'];
     if (!q_val('SELECT 1 FROM patients WHERE id = ?', [$patientId])) $errors[] = 'Choose a patient.';
-    if (!is_numeric($values['amount']) || (float) $values['amount'] <= 0) $errors[] = 'Enter an amount greater than ₱0.';
+    if (!valid_amount($values['amount'])) $errors[] = 'Enter an amount from ₱0.01 to ' . money(MAX_AMOUNT) . ', with at most 2 decimals.';
+    $errors = array_merge($errors, length_errors($values, ['reference' => ['Reference', 80], 'notes' => ['Notes', 255]]));
     if (!isset(PAYMENT_METHODS[$values['method']])) $errors[] = 'Choose a payment method.';
     if (!valid_date($values['paid_on']) || $values['paid_on'] > date('Y-m-d')) $errors[] = 'Enter a valid payment date (not in the future).';
 
@@ -48,12 +49,12 @@ layout_start('Log payment', 'patients', ['subtitle' => 'Record a payment against
       <?php endforeach; ?>
     </select></div>
   <div class="form-grid">
-    <div class="field"><label for="amount">Amount (₱)</label><input type="number" id="amount" name="amount" min="0.01" step="0.01" value="<?= e($values['amount']) ?>" required></div>
+    <div class="field"><label for="amount">Amount (₱)</label><input type="number" id="amount" name="amount" min="0.01" max="<?= MAX_AMOUNT ?>" step="0.01" value="<?= e($values['amount']) ?>" required></div>
     <div class="field"><label for="method">Method</label>
       <select id="method" name="method"><?php foreach (PAYMENT_METHODS as $k => $lbl): ?><option value="<?= $k ?>"<?= selected($k, $values['method']) ?>><?= $lbl ?></option><?php endforeach; ?></select></div>
     <div class="field"><label for="paid_on">Date</label><input type="date" id="paid_on" name="paid_on" max="<?= date('Y-m-d') ?>" value="<?= e($values['paid_on']) ?>" required></div>
-    <div class="field"><label for="reference">Reference / OR no.</label><input type="text" id="reference" name="reference" value="<?= e($values['reference']) ?>" placeholder="GCash ref, OR number"></div>
-    <div class="field span-2"><label for="notes">Notes</label><input type="text" id="notes" name="notes" value="<?= e($values['notes']) ?>"></div>
+    <div class="field"><label for="reference">Reference / OR no.</label><input type="text" id="reference" name="reference" maxlength="80" value="<?= e($values['reference']) ?>" placeholder="GCash ref, OR number"></div>
+    <div class="field span-2"><label for="notes">Notes</label><input type="text" id="notes" name="notes" maxlength="255" value="<?= e($values['notes']) ?>"></div>
   </div>
   <div class="row"><button class="btn btn-primary" type="submit">Record payment</button><a class="btn" href="<?= $values['patient_id'] ? 'patient.php?id=' . (int) $values['patient_id'] . '&amp;tab=billing' : 'index.php' ?>">Cancel</a></div>
 </form>

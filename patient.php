@@ -20,9 +20,15 @@ if (is_post()) {
         require_perm('chart.edit');
         $tooth = (int) input('tooth_no');
         $status = input('status');
-        $amount = (float) input('amount', '0');
+        $amountRaw = input('amount') === '' ? '0' : input('amount');
+        $amount = (float) $amountRaw;
+        $tooLong = length_errors(['procedure_name' => input('procedure_name'), 'notes' => input('notes')], ['procedure_name' => ['Procedure', 120], 'notes' => ['Notes', 255]]);
         if ($tooth < 1 || $tooth > 32 || !isset(TOOTH_STATUSES[$status])) {
             flash('error', 'Choose a tooth and a valid condition.');
+        } elseif (!valid_amount($amountRaw, true)) {
+            flash('error', 'Charge must be from ₱0 to ' . money(MAX_AMOUNT) . ', with at most 2 decimals.');
+        } elseif ($tooLong) {
+            flash('error', implode(' ', $tooLong));
         } else {
             q('INSERT INTO tooth_records (patient_id, tooth_no, status, procedure_name, notes, recorded_by) VALUES (?, ?, ?, ?, ?, ?)',
                 [$id, $tooth, $status, nullable(input('procedure_name')), nullable(input('notes')), $user['id']]);
@@ -37,11 +43,17 @@ if (is_post()) {
     }
 
     if ($action === 'treatment') {
-        $amount = (float) input('amount', '0');
+        $amount = (float) input('amount');
         $tooth = (int) input('tooth_no');
         $date = input('performed_on');
-        if (input('procedure_name') === '' || $amount < 0 || !valid_date($date) || ($tooth && ($tooth < 1 || $tooth > 32))) {
-            flash('error', 'Enter a procedure, a valid date and an amount of ₱0 or more.');
+        $dentistId = input('dentist_id');
+        $tooLong = length_errors(['procedure_name' => input('procedure_name'), 'notes' => input('notes')], ['procedure_name' => ['Procedure', 120], 'notes' => ['Notes', 255]]);
+        if (input('procedure_name') === '' || !valid_amount(input('amount'), true) || !valid_date($date) || ($tooth && ($tooth < 1 || $tooth > 32))) {
+            flash('error', 'Enter a procedure, a valid date and an amount from ₱0 to ' . money(MAX_AMOUNT) . '.');
+        } elseif ($tooLong) {
+            flash('error', implode(' ', $tooLong));
+        } elseif ($dentistId !== '' && !in_array((int) $dentistId, array_map('intval', array_column(dentist_options(), 'id')), true)) {
+            flash('error', 'Choose a valid dentist.');
         } else {
             q('INSERT INTO treatments (patient_id, tooth_no, procedure_name, notes, amount, performed_on, dentist_id) VALUES (?, ?, ?, ?, ?, ?, ?)',
                 [$id, $tooth ?: null, input('procedure_name'), nullable(input('notes')), $amount, $date, nullable(input('dentist_id'))]);
@@ -64,11 +76,48 @@ if (is_post()) {
         require_perm('patients.archive');
         $new = $action === 'archive' ? 'archived' : 'incomplete';
         q('UPDATE patients SET status = ? WHERE id = ?', [$new, $id]);
+        $cancelled = $restored = $skipped = 0;
         if ($action === 'archive') {
-            q("UPDATE reminders SET status = 'cancelled' WHERE patient_id = ? AND status = 'scheduled'", [$id]);
+            // Free their upcoming chair time; past appointments stay as history. The note marks
+            // which ones archiving cancelled, so a restore can bring them back.
+            $cancelled = q("UPDATE appointments SET status = 'cancelled', notes = TRIM(CONCAT(COALESCE(notes, ''), ' ', ?))
+                WHERE patient_id = ? AND starts_at > NOW() AND status IN ('pending','confirmed')", [ARCHIVE_NOTE, $id])->rowCount();
+            q("UPDATE reminders SET status = 'cancelled' WHERE patient_id = ? AND status IN ('scheduled','failed')", [$id]);
+            q('UPDATE waitlist SET resolved_at = NOW() WHERE patient_id = ? AND resolved_at IS NULL', [$id]);
+        } else {
+            // Re-open still-upcoming appointments that archiving cancelled, unless the slot was taken since.
+            $toRestore = q_all("SELECT * FROM appointments WHERE patient_id = ? AND status = 'cancelled' AND starts_at > NOW() AND notes LIKE ?",
+                [$id, '%' . ARCHIVE_NOTE . '%']);
+            foreach ($toRestore as $a) {
+                try {
+                    $ok = with_booking_lock(function () use ($a) {
+                        if (appointment_clash((int) $a['chair'], $a['starts_at'], (int) $a['duration_min'], (int) $a['id'])) {
+                            return false;
+                        }
+                        q("UPDATE appointments SET status = 'pending', notes = ? WHERE id = ?",
+                            [nullable(trim(str_replace(ARCHIVE_NOTE, '', (string) $a['notes']))), $a['id']]);
+                        return true;
+                    });
+                } catch (RuntimeException $ex) {
+                    $ok = false;
+                }
+                if ($ok) {
+                    schedule_appointment_reminders((int) $a['id']);
+                    $restored++;
+                } else {
+                    $skipped++;
+                }
+            }
         }
-        log_activity("patient_$action", 'patient', $id, $patient['full_name']);
-        flash('success', $action === 'archive' ? 'Patient archived. Their records are kept but hidden from lists.' : 'Patient restored. Review the chart to mark it complete.');
+        $summary = $action === 'archive'
+            ? ($cancelled ? " ($cancelled appointments cancelled)" : '')
+            : ($restored || $skipped ? " ($restored appointments restored, $skipped not)" : '');
+        log_activity("patient_$action", 'patient', $id, $patient['full_name'] . $summary);
+        flash('success', $action === 'archive'
+            ? 'Patient archived. Their records are kept but hidden from lists.' . ($cancelled ? " $cancelled upcoming appointment(s) were cancelled." : '')
+            : 'Patient restored. Review the chart to mark it complete.'
+                . ($restored ? " $restored upcoming appointment(s) were re-opened as Pending; confirm them with the patient." : '')
+                . ($skipped ? " $skipped could not be re-opened because the slot is now taken; book those again." : ''));
         redirect($action === 'archive' ? 'patients.php' : 'patient_form.php?id=' . $id);
     }
 }
@@ -125,7 +174,7 @@ layout_start($patient['full_name'], 'patients', ['subtitle' => $patient['care_ty
     <a class="btn btn-sm" href="appointment_form.php?patient_id=<?= $id ?>">Book</a>
     <a class="btn btn-sm" href="payment.php?patient_id=<?= $id ?>">Log payment</a>
     <?php if (can('patients.archive')): ?>
-      <form method="post" data-confirm="<?= $patient['status'] === 'archived' ? 'Restore this patient?' : 'Archive this patient? Their records are kept but hidden from lists and pending reminders are cancelled.' ?>">
+      <form method="post" data-confirm="<?= $patient['status'] === 'archived' ? 'Restore this patient?' : 'Archive this patient? Their records are kept but hidden from lists. Upcoming appointments, reminders and waitlist entries are cancelled.' ?>">
         <?= csrf_field() ?><input type="hidden" name="action" value="<?= $patient['status'] === 'archived' ? 'restore' : 'archive' ?>">
         <button class="btn btn-sm <?= $patient['status'] === 'archived' ? '' : 'btn-danger' ?>" type="submit"><?= $patient['status'] === 'archived' ? 'Restore' : 'Archive' ?></button>
       </form>
@@ -175,9 +224,9 @@ layout_start($patient['full_name'], 'patients', ['subtitle' => $patient['care_ty
         <?= csrf_field() ?><input type="hidden" name="action" value="tooth"><input type="hidden" name="tooth_no">
         <div class="field"><label for="t-status">Condition</label>
           <select id="t-status" name="status"><?php foreach (TOOTH_STATUSES as $k => [$label]): ?><option value="<?= $k ?>"><?= e($label) ?></option><?php endforeach; ?></select></div>
-        <div class="field"><label for="t-proc">Procedure</label><input type="text" id="t-proc" name="procedure_name" placeholder="e.g. Composite filling"></div>
-        <div class="field"><label for="t-notes">Notes</label><input type="text" id="t-notes" name="notes" placeholder="e.g. Composite resin, A2 shade"></div>
-        <div class="field"><label for="t-amt">Charge (optional)</label><input type="number" id="t-amt" name="amount" min="0" step="0.01" placeholder="0.00"><span class="hint">Adds a treatment to this patient's bill.</span></div>
+        <div class="field"><label for="t-proc">Procedure</label><input type="text" id="t-proc" name="procedure_name" maxlength="120" placeholder="e.g. Composite filling"></div>
+        <div class="field"><label for="t-notes">Notes</label><input type="text" id="t-notes" name="notes" maxlength="255" placeholder="e.g. Composite resin, A2 shade"></div>
+        <div class="field"><label for="t-amt">Charge (optional)</label><input type="number" id="t-amt" name="amount" min="0" max="<?= MAX_AMOUNT ?>" step="0.01" placeholder="0.00"><span class="hint">Adds a treatment to this patient's bill.</span></div>
         <div><button class="btn btn-primary" type="submit">Save tooth entry</button></div>
       <?php else: ?>
         <input type="hidden" name="tooth_no"><input type="hidden" name="status"><input type="hidden" name="procedure_name"><input type="hidden" name="notes">
@@ -237,17 +286,17 @@ layout_start($patient['full_name'], 'patients', ['subtitle' => $patient['care_ty
     <form class="dialog-body" method="post">
       <div class="dialog-head"><h2>Add treatment</h2><button type="button" class="close" aria-label="Close">×</button></div>
       <?= csrf_field() ?><input type="hidden" name="action" value="treatment">
-      <div class="field"><label for="tr-proc">Procedure</label><input type="text" id="tr-proc" name="procedure_name" required placeholder="e.g. Oral prophylaxis"></div>
+      <div class="field"><label for="tr-proc">Procedure</label><input type="text" id="tr-proc" name="procedure_name" maxlength="120" required placeholder="e.g. Oral prophylaxis"></div>
       <div class="row">
         <div class="field spacer"><label for="tr-tooth">Tooth # (optional)</label><input type="number" id="tr-tooth" name="tooth_no" min="1" max="32"></div>
-        <div class="field spacer"><label for="tr-amt">Amount (₱)</label><input type="number" id="tr-amt" name="amount" min="0" step="0.01" required></div>
+        <div class="field spacer"><label for="tr-amt">Amount (₱)</label><input type="number" id="tr-amt" name="amount" min="0" max="<?= MAX_AMOUNT ?>" step="0.01" required></div>
       </div>
       <div class="row">
         <div class="field spacer"><label for="tr-date">Date</label><input type="date" id="tr-date" name="performed_on" value="<?= date('Y-m-d') ?>" required></div>
         <div class="field spacer"><label for="tr-dent">Dentist</label>
           <select id="tr-dent" name="dentist_id"><option value="">—</option><?php foreach (dentist_options() as $d): ?><option value="<?= $d['id'] ?>"<?= selected($d['id'], $user['id']) ?>><?= e($d['name']) ?></option><?php endforeach; ?></select></div>
       </div>
-      <div class="field"><label for="tr-notes">Notes</label><input type="text" id="tr-notes" name="notes"></div>
+      <div class="field"><label for="tr-notes">Notes</label><input type="text" id="tr-notes" name="notes" maxlength="255"></div>
       <div><button class="btn btn-primary" type="submit">Save treatment</button></div>
     </form>
   </dialog>

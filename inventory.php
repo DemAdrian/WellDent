@@ -10,8 +10,14 @@ if (is_post()) {
         $itemId = (int) input('id');
         $name = input('name');
         $min = max(0, (int) input('min_quantity'));
+        $tooLong = length_errors(['name' => $name, 'category' => input('category'), 'unit' => input('unit'), 'supplier' => input('supplier')],
+            ['name' => ['Name', 120], 'category' => ['Category', 60], 'unit' => ['Unit', 30], 'supplier' => ['Supplier', 120]]);
         if ($name === '') {
             flash('error', 'Item name is required.');
+        } elseif ($tooLong) {
+            flash('error', implode(' ', $tooLong));
+        } elseif ($min > MAX_QUANTITY || (int) input('quantity') > MAX_QUANTITY) {
+            flash('error', 'Quantities must be ' . number_format(MAX_QUANTITY) . ' or less.');
         } elseif ($itemId) {
             q('UPDATE inventory_items SET name = ?, category = ?, unit = ?, min_quantity = ?, supplier = ? WHERE id = ?',
                 [$name, nullable(input('category')), input('unit') ?: 'pcs', $min, nullable(input('supplier')), $itemId]);
@@ -33,18 +39,28 @@ if (is_post()) {
         $type = input('type') === 'out' ? 'out' : 'in';
         $qty = (int) input('quantity');
         $item = q_row('SELECT * FROM inventory_items WHERE id = ?', [$itemId]);
-        if (!$item || $qty <= 0) {
-            flash('error', 'Choose an item and a quantity above 0.');
+        if (!$item || $qty <= 0 || $qty > MAX_QUANTITY) {
+            flash('error', 'Choose an item and a quantity from 1 to ' . number_format(MAX_QUANTITY) . '.');
+        } elseif (mb_strlen(input('reason')) > 160) {
+            flash('error', 'Reason must be at most 160 characters.');
         } elseif ($type === 'out' && $qty > $item['quantity']) {
             flash('error', "Only {$item['quantity']} {$item['unit']} of {$item['name']} in stock.");
         } else {
             db()->beginTransaction();
-            q('UPDATE inventory_items SET quantity = quantity ' . ($type === 'in' ? '+' : '-') . ' ? WHERE id = ?', [$qty, $itemId]);
-            q('INSERT INTO stock_movements (item_id, type, quantity, reason, user_id) VALUES (?, ?, ?, ?, ?)',
-                [$itemId, $type, $qty, nullable(input('reason')), $user['id']]);
-            db()->commit();
-            log_activity('stock_' . $type, 'inventory', $itemId, "$qty {$item['unit']} {$item['name']}");
-            flash('success', ($type === 'in' ? 'Added ' : 'Used ') . "$qty {$item['unit']} of {$item['name']}.");
+            // The quantity guard stops two devices from using the same last units at once.
+            $changed = $type === 'in'
+                ? q('UPDATE inventory_items SET quantity = quantity + ? WHERE id = ?', [$qty, $itemId])->rowCount()
+                : q('UPDATE inventory_items SET quantity = quantity - ? WHERE id = ? AND quantity >= ?', [$qty, $itemId, $qty])->rowCount();
+            if ($changed === 0) {
+                db()->rollBack();
+                flash('error', "Not enough {$item['name']} in stock. Someone may have just used some; check the list and try again.");
+            } else {
+                q('INSERT INTO stock_movements (item_id, type, quantity, reason, user_id) VALUES (?, ?, ?, ?, ?)',
+                    [$itemId, $type, $qty, nullable(input('reason')), $user['id']]);
+                db()->commit();
+                log_activity('stock_' . $type, 'inventory', $itemId, "$qty {$item['unit']} {$item['name']}");
+                flash('success', ($type === 'in' ? 'Added ' : 'Used ') . "$qty {$item['unit']} of {$item['name']}.");
+            }
         }
     } elseif ($action === 'item_remove') {
         q('UPDATE inventory_items SET is_active = 0 WHERE id = ?', [(int) input('id')]);
@@ -141,9 +157,9 @@ layout_start('Inventory', 'inventory', [
       </select></div>
     <div class="row">
       <div class="field spacer"><label for="s-type">Movement</label><select id="s-type" name="type"><option value="in">Stock in (received)</option><option value="out">Stock out (used)</option></select></div>
-      <div class="field spacer"><label for="s-qty">Quantity</label><input type="number" id="s-qty" name="quantity" min="1" required></div>
+      <div class="field spacer"><label for="s-qty">Quantity</label><input type="number" id="s-qty" name="quantity" min="1" max="<?= MAX_QUANTITY ?>" required></div>
     </div>
-    <div class="field"><label for="s-reason">Reason</label><input type="text" id="s-reason" name="reason" placeholder="Supplier delivery, used in procedure…"></div>
+    <div class="field"><label for="s-reason">Reason</label><input type="text" id="s-reason" name="reason" maxlength="160" placeholder="Supplier delivery, used in procedure…"></div>
     <div><button class="btn btn-primary" type="submit">Save</button></div>
   </form>
 </dialog>
@@ -152,17 +168,17 @@ layout_start('Inventory', 'inventory', [
   <form class="dialog-body" method="post">
     <div class="dialog-head"><h2 data-text="dialog_title">Add item</h2><button type="button" class="close" aria-label="Close">×</button></div>
     <?= csrf_field() ?><input type="hidden" name="action" value="item_save"><input type="hidden" name="id">
-    <div class="field"><label for="i-name">Name</label><input type="text" id="i-name" name="name" required placeholder="Nitrile gloves (M)"></div>
+    <div class="field"><label for="i-name">Name</label><input type="text" id="i-name" name="name" maxlength="120" required placeholder="Nitrile gloves (M)"></div>
     <div class="row">
-      <div class="field spacer"><label for="i-cat">Category</label><input type="text" id="i-cat" name="category" list="cats" placeholder="Consumables"></div>
-      <div class="field spacer"><label for="i-unit">Unit</label><input type="text" id="i-unit" name="unit" placeholder="box, pcs, ml"></div>
+      <div class="field spacer"><label for="i-cat">Category</label><input type="text" id="i-cat" name="category" maxlength="60" list="cats" placeholder="Consumables"></div>
+      <div class="field spacer"><label for="i-unit">Unit</label><input type="text" id="i-unit" name="unit" maxlength="30" placeholder="box, pcs, ml"></div>
     </div>
     <datalist id="cats"><option value="Consumables"><option value="Restorative"><option value="Orthodontic"><option value="Anesthetics"><option value="Sterilization"><option value="Equipment"></datalist>
     <div class="row">
-      <div class="field spacer"><label for="i-qty">Opening quantity</label><input type="number" id="i-qty" name="quantity" min="0"><span class="hint">Change stock later with Stock in / out.</span></div>
-      <div class="field spacer"><label for="i-min">Alert at or below</label><input type="number" id="i-min" name="min_quantity" min="0"></div>
+      <div class="field spacer"><label for="i-qty">Opening quantity</label><input type="number" id="i-qty" name="quantity" min="0" max="<?= MAX_QUANTITY ?>"><span class="hint">Change stock later with Stock in / out.</span></div>
+      <div class="field spacer"><label for="i-min">Alert at or below</label><input type="number" id="i-min" name="min_quantity" min="0" max="<?= MAX_QUANTITY ?>"></div>
     </div>
-    <div class="field"><label for="i-sup">Supplier</label><input type="text" id="i-sup" name="supplier"></div>
+    <div class="field"><label for="i-sup">Supplier</label><input type="text" id="i-sup" name="supplier" maxlength="120"></div>
     <div><button class="btn btn-primary" type="submit">Save item</button></div>
   </form>
 </dialog>

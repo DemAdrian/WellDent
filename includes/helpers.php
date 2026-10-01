@@ -84,6 +84,65 @@ function valid_date(string $value): bool
     return $d !== false && $d->format('Y-m-d') === $value;
 }
 
+/** Largest amount a DECIMAL(10,2) column holds. */
+const MAX_AMOUNT = 99999999.99;
+
+/** Largest stock count we accept in one entry. */
+const MAX_QUANTITY = 1000000;
+
+/** True for a number from 0 (or above 0 when $allowZero is false) up to MAX_AMOUNT, with at most 2 decimals. */
+function valid_amount(string $value, bool $allowZero = false): bool
+{
+    if (!preg_match('/^\d+(\.\d{1,2})?$/', $value)) {
+        return false;
+    }
+    $n = (float) $value;
+    return ($allowZero ? $n >= 0 : $n > 0) && $n <= MAX_AMOUNT;
+}
+
+/**
+ * Errors for values longer than their database column allows.
+ * $limits: field => [label, max characters]
+ */
+function length_errors(array $values, array $limits): array
+{
+    $errors = [];
+    foreach ($limits as $field => [$label, $max]) {
+        if (mb_strlen((string) ($values[$field] ?? '')) > $max) {
+            $errors[] = "$label must be at most $max characters.";
+        }
+    }
+    return $errors;
+}
+
+/**
+ * Normalizes a Philippine phone number, or returns null when it isn't one.
+ *   Mobile:   0917 123 4567, +63 917 123 4567, 639171234567 → 09171234567 (11 digits)
+ *   Landline: (02) 8123 4567, (032) 123 4567, +63 2 8123 4567 → 0281234567 (10 digits)
+ */
+function normalize_ph_phone(string $value): ?string
+{
+    $digits = preg_replace('/[\s().-]+/', '', $value);
+    if (!preg_match('/^(?:\+?63|0)(\d{9,10})$/', $digits, $m)) {
+        return null;
+    }
+    $national = $m[1];
+    if (strlen($national) === 10 && $national[0] === '9') {
+        return '0' . $national; // mobile
+    }
+    if (strlen($national) === 9 && $national[0] !== '9') {
+        return '0' . $national; // landline: area code + local number
+    }
+    return null;
+}
+
+/** True when the number can receive SMS (a PH mobile number). */
+function is_ph_mobile(?string $value): bool
+{
+    $n = normalize_ph_phone((string) $value);
+    return $n !== null && strlen($n) === 11;
+}
+
 function fmt_date(?string $value, string $format = 'M j, Y'): string
 {
     return $value ? date($format, strtotime($value)) : '—';

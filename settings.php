@@ -19,7 +19,7 @@ if (is_post()) {
         $username = input('username');
         $password = (string) ($_POST['password'] ?? '');
         $role = input('role');
-        if (input('name') === '' || !preg_match('/^[A-Za-z0-9._-]{3,60}$/', $username) || strlen($password) < 8 || !isset(ROLE_LABELS[$role])) {
+        if (input('name') === '' || mb_strlen(input('name')) > 120 || !preg_match('/^[A-Za-z0-9._-]{3,60}$/', $username) || strlen($password) < 8 || !isset(ROLE_LABELS[$role])) {
             flash('error', 'Enter a name, a 3–60 character username, a role, and a password of at least 8 characters.');
         } elseif (q_val('SELECT 1 FROM users WHERE username = ?', [$username])) {
             flash('error', "The username “{$username}” is taken.");
@@ -130,7 +130,7 @@ layout_start('Settings', 'settings', ['subtitle' => 'Clinic users, phone access 
   <form class="dialog-body" method="post">
     <div class="dialog-head"><h2>Add user</h2><button type="button" class="close" aria-label="Close">×</button></div>
     <?= csrf_field() ?><input type="hidden" name="action" value="user_add">
-    <div class="field"><label for="u-name">Full name</label><input type="text" id="u-name" name="name" required></div>
+    <div class="field"><label for="u-name">Full name</label><input type="text" id="u-name" name="name" maxlength="120" required></div>
     <div class="row">
       <div class="field spacer"><label for="u-user">Username</label><input type="text" id="u-user" name="username" required pattern="[A-Za-z0-9._-]{3,60}"></div>
       <div class="field spacer"><label for="u-role">Role</label><select id="u-role" name="role"><?php foreach (ROLE_LABELS as $k => $lbl): ?><option value="<?= $k ?>"<?= selected($k, 'staff') ?>><?= $lbl ?></option><?php endforeach; ?></select></div>

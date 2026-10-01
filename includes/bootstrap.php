@@ -12,6 +12,7 @@ date_default_timezone_set($GLOBALS['config']['timezone']);
 require __DIR__ . '/helpers.php';
 require __DIR__ . '/db.php';
 require __DIR__ . '/auth.php';
+require __DIR__ . '/appointments.php';
 require __DIR__ . '/reminders.php';
 require __DIR__ . '/layout.php';
 

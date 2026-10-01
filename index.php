@@ -12,7 +12,7 @@ $balances = q_row('SELECT COALESCE(SUM(CASE WHEN b.balance > 0 THEN b.balance EN
     COUNT(CASE WHEN b.balance > 0 THEN 1 END) AS accounts
     FROM patients p JOIN ' . BALANCES . " b ON b.patient_id = p.id WHERE p.status <> 'archived'");
 
-$reminders = q_row("SELECT COUNT(*) AS total, COUNT(CASE WHEN channel = 'sms' THEN 1 END) AS sms
+$reminders = q_row("SELECT COUNT(*) AS total, COUNT(CASE WHEN send_at <= NOW() THEN 1 END) AS due
     FROM reminders WHERE status = 'scheduled'");
 
 $lowStock = q_all('SELECT name, quantity, min_quantity, unit FROM inventory_items
@@ -81,9 +81,9 @@ layout_start("$greeting, $name", 'dashboard', [
   </a>
   <a class="card stat" href="reminders.php">
     <i class="dot" style="background:#e0b23c"></i>
-    <div class="label">Reminders due</div>
+    <div class="label">Reminders scheduled</div>
     <div class="value"><?= (int) $reminders['total'] ?></div>
-    <div class="sub"><?= (int) $reminders['sms'] ?> SMS scheduled</div>
+    <div class="sub"><?= (int) $reminders['due'] ?> due to send now</div>
   </a>
   <a class="card stat" href="inventory.php?filter=low">
     <i class="dot" style="background:var(--blue)"></i>

@@ -13,17 +13,37 @@ if (is_post()) {
     if ($action === 'status') {
         $id = (int) input('id');
         $status = input('status');
-        if (isset(APPOINTMENT_STATUSES[$status])) {
-            q('UPDATE appointments SET status = ? WHERE id = ?', [$status, $id]);
-            if (in_array($status, ['cancelled', 'no_show', 'completed'], true)) {
-                q("UPDATE reminders SET status = 'cancelled' WHERE appointment_id = ? AND status = 'scheduled'", [$id]);
+        $appt = q_row('SELECT * FROM appointments WHERE id = ?', [$id]);
+        if ($appt && isset(APPOINTMENT_STATUSES[$status])) {
+            try {
+                // Re-opening a cancelled or no-show slot must not double-book the chair.
+                $clash = with_booking_lock(function () use ($appt, $status) {
+                    $reopening = in_array($appt['status'], NON_BLOCKING_STATUSES, true) && !in_array($status, NON_BLOCKING_STATUSES, true);
+                    $clash = $reopening ? appointment_clash((int) $appt['chair'], $appt['starts_at'], (int) $appt['duration_min'], (int) $appt['id']) : null;
+                    if (!$clash) {
+                        q('UPDATE appointments SET status = ? WHERE id = ?', [$status, $appt['id']]);
+                    }
+                    return $clash;
+                });
+                if ($clash) {
+                    flash('error', "Chair {$appt['chair']} is already booked at " . fmt_time($clash['starts_at']) . " ({$clash['full_name']}). Reschedule this appointment instead.");
+                } else {
+                    schedule_appointment_reminders($id); // cancels them for closed statuses, restores them when re-opened
+                    log_activity('appointment_status', 'appointment', $id, $status);
+                    flash('success', 'Status updated to ' . APPOINTMENT_STATUSES[$status] . '.');
+                }
+            } catch (RuntimeException $ex) {
+                flash('error', $ex->getMessage());
             }
-            log_activity('appointment_status', 'appointment', $id, $status);
-            flash('success', 'Status updated to ' . APPOINTMENT_STATUSES[$status] . '.');
         }
     } elseif ($action === 'waitlist_add') {
         $patientId = (int) input('patient_id');
-        if ($patientId && input('procedure_name') !== '') {
+        $validPatient = q_val("SELECT 1 FROM patients WHERE id = ? AND status <> 'archived'", [$patientId]);
+        if (!$validPatient || input('procedure_name') === '') {
+            flash('error', 'Choose a patient and enter the procedure.');
+        } elseif (mb_strlen(input('procedure_name')) > 120 || mb_strlen(input('notes')) > 255) {
+            flash('error', 'Keep the procedure to 120 characters and notes to 255.');
+        } else {
             q('INSERT INTO waitlist (patient_id, procedure_name, notes) VALUES (?, ?, ?)',
                 [$patientId, input('procedure_name'), nullable(input('notes'))]);
             flash('success', 'Added to the waitlist.');
@@ -34,7 +54,7 @@ if (is_post()) {
     } elseif ($action === 'notice_add' && can('notices.manage')) {
         $from = input('starts_on');
         $to = input('ends_on') ?: $from;
-        if (input('message') !== '' && valid_date($from) && valid_date($to) && $to >= $from) {
+        if (input('message') !== '' && mb_strlen(input('message')) <= 255 && valid_date($from) && valid_date($to) && $to >= $from) {
             q('INSERT INTO notices (message, starts_on, ends_on, created_by) VALUES (?, ?, ?, ?)',
                 [input('message'), $from, $to, current_user()['id']]);
             flash('success', 'Notice posted.');
@@ -206,8 +226,8 @@ layout_start('Appointments', 'appointments', [
       <select id="wl-p" name="patient_id" required><option value="">Choose patient…</option>
         <?php foreach (patient_options() as $p): ?><option value="<?= $p['id'] ?>"><?= e($p['full_name']) ?></option><?php endforeach; ?>
       </select></div>
-    <div class="field"><label for="wl-proc">Procedure</label><input type="text" id="wl-proc" name="procedure_name" required placeholder="e.g. Cleaning"></div>
-    <div class="field"><label for="wl-n">Notes</label><input type="text" id="wl-n" name="notes" placeholder="Preferred days or times"></div>
+    <div class="field"><label for="wl-proc">Procedure</label><input type="text" id="wl-proc" name="procedure_name" maxlength="120" required placeholder="e.g. Cleaning"></div>
+    <div class="field"><label for="wl-n">Notes</label><input type="text" id="wl-n" name="notes" maxlength="255" placeholder="Preferred days or times"></div>
     <div><button class="btn btn-primary" type="submit">Add</button></div>
   </form>
 </dialog>

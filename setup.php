@@ -22,7 +22,7 @@ if ($userCount === 0 && is_post()) {
     $name = input('name');
     $username = input('username');
     $password = (string) ($_POST['password'] ?? '');
-    if ($name === '') $errors[] = 'Enter your name.';
+    if ($name === '' || mb_strlen($name) > 120) $errors[] = 'Enter your name (up to 120 characters).';
     if (!preg_match('/^[A-Za-z0-9._-]{3,60}$/', $username)) $errors[] = 'Username must be 3–60 letters, numbers, dots, dashes or underscores.';
     if (strlen($password) < 8) $errors[] = 'Password must be at least 8 characters.';
     if (!$errors) {
@@ -54,7 +54,7 @@ if ($userCount === 0 && is_post()) {
     <?php else: ?>
       <?php if ($errors): ?><ul class="errors"><?php foreach ($errors as $err): ?><li><?= e($err) ?></li><?php endforeach; ?></ul><?php endif; ?>
       <?= csrf_field() ?>
-      <div class="field"><label for="name">Full name</label><input type="text" id="name" name="name" value="<?= e(input('name')) ?>" placeholder="Dr. Maya Santos" required></div>
+      <div class="field"><label for="name">Full name</label><input type="text" id="name" name="name" maxlength="120" value="<?= e(input('name')) ?>" placeholder="Dr. Maya Santos" required></div>
       <div class="field"><label for="username">Username</label><input type="text" id="username" name="username" value="<?= e(input('username')) ?>" required></div>
       <div class="field"><label for="password">Password</label><input type="password" id="password" name="password" minlength="8" required></div>
       <button class="btn btn-primary" type="submit">Create admin account</button>

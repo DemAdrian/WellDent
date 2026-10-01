@@ -12,6 +12,13 @@ if ($id && !$patient) {
 $fields = ['full_name', 'birth_date', 'sex', 'phone', 'email', 'address', 'care_type',
     'emergency_name', 'emergency_relationship', 'emergency_phone',
     'allergies', 'conditions', 'medications', 'dental_history', 'notes', 'consent_date'];
+const PATIENT_FIELD_LIMITS = [
+    'full_name' => ['Full name', 150], 'email' => ['Email', 150], 'address' => ['Address', 255],
+    'emergency_name' => ['Emergency contact name', 150], 'emergency_relationship' => ['Relationship', 60],
+    'allergies' => ['Allergies', 5000], 'conditions' => ['Conditions', 5000], 'medications' => ['Medications', 5000],
+    'dental_history' => ['Dental history', 5000], 'notes' => ['Notes', 5000],
+];
+
 $values = [];
 foreach ($fields as $f) {
     $values[$f] = $patient[$f] ?? '';
@@ -50,6 +57,17 @@ if (is_post()) {
     if ($values['email'] !== '' && !filter_var($values['email'], FILTER_VALIDATE_EMAIL)) $errors[] = 'Email address is not valid.';
     if (!in_array($values['care_type'], CARE_TYPES, true)) $errors[] = 'Choose a care type.';
     if ($values['consent_date'] !== '' && !valid_date($values['consent_date'])) $errors[] = 'Consent date is not valid.';
+    foreach (['phone' => 'Phone', 'emergency_phone' => 'Emergency contact phone'] as $f => $label) {
+        if ($values[$f] !== '') {
+            $normalized = normalize_ph_phone($values[$f]);
+            if ($normalized === null) {
+                $errors[] = "$label must be a Philippine number, e.g. 0917 123 4567 or (02) 8123 4567.";
+            } else {
+                $values[$f] = $normalized;
+            }
+        }
+    }
+    $errors = array_merge($errors, length_errors($values, PATIENT_FIELD_LIMITS));
 
     if (!$errors) {
         $status = $draft ? 'draft' : (chart_complete($values) ? 'active' : 'incomplete');
@@ -63,6 +81,13 @@ if (is_post()) {
         if ($patient) {
             $sets = implode(', ', array_map(fn($k) => "$k = ?", array_keys($data)));
             q("UPDATE patients SET $sets WHERE id = ?", [...array_values($data), $id]);
+            // Reminders carry the name, number and address they were scheduled with.
+            foreach (['full_name', 'phone', 'email'] as $f) {
+                if ((string) $patient[$f] !== $values[$f]) {
+                    reschedule_patient_reminders($id);
+                    break;
+                }
+            }
             log_activity('patient_updated', 'patient', $id, $values['full_name']);
             flash('success', 'Patient record saved.');
         } else {
@@ -82,10 +107,12 @@ if (is_post()) {
 $field = function (string $name, string $label, string $type = 'text', string $placeholder = '', bool $required = false) use ($values): string {
     return '<div class="field"><label for="' . $name . '">' . e($label) . ($required ? ' *' : '') . '</label>'
         . '<input type="' . $type . '" id="' . $name . '" name="' . $name . '" value="' . e($values[$name]) . '" placeholder="' . e($placeholder) . '"'
-        . ($type === 'date' ? ' max="' . date('Y-m-d') . '"' : '') . '></div>';
+        . ($type === 'date' ? ' max="' . date('Y-m-d') . '"' : '')
+        . ($type === 'tel' ? ' maxlength="17" inputmode="tel"' : '')
+        . (isset(PATIENT_FIELD_LIMITS[$name]) ? ' maxlength="' . PATIENT_FIELD_LIMITS[$name][1] . '"' : '') . '></div>';
 };
 $area = fn(string $name, string $label, string $placeholder) => '<div class="field"><label for="' . $name . '">' . e($label) . '</label>'
-    . '<textarea id="' . $name . '" name="' . $name . '" placeholder="' . e($placeholder) . '">' . e($values[$name]) . '</textarea></div>';
+    . '<textarea id="' . $name . '" name="' . $name . '" maxlength="' . PATIENT_FIELD_LIMITS[$name][1] . '" placeholder="' . e($placeholder) . '">' . e($values[$name]) . '</textarea></div>';
 
 layout_start($patient ? 'Edit patient' : 'Add patient', 'patients', [
     'subtitle' => $patient ? $patient['full_name'] . ' · ' . $patient['record_no'] : 'Create a complete chart for a new patient',
