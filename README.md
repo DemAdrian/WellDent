@@ -97,6 +97,32 @@ storage/         outbox.log (test-mode messages); not web-accessible
 
 - Passwords are hashed with `password_hash`. Logins lock for 60 seconds after 5 failed attempts.
 - Every form carries a CSRF token, and all queries use prepared statements.
-- Apache (`.htaccess`) blocks web access to `config/`, `includes/`, `database/`, `cron/` and `storage/`.
+- Apache (`.htaccess`) blocks web access to `config/`, `includes/`, `database/`, `cron/` and `storage/`, hidden files such as `.git`, Markdown/SQL/log files, and folder listings. These rules need `AllowOverride All` for the WellDent folder (XAMPP's default for `htdocs`).
+- PHP errors are logged to `storage/php-errors.log` and never shown on screen. Set `'security' => ['debug' => true]` in `config/config.local.php` while developing to see them.
+- Sessions sign out after 30 minutes without activity (`security.idle_minutes`). Changing or resetting a password signs out that user's other sessions.
 - Archiving a patient hides the record and keeps it, since medical records should be retained. Only admins can delete billing entries.
-- This app is designed for a trusted clinic LAN over plain HTTP. Don't expose it to the internet as-is.
+- Over plain `http://`, anyone on the same Wi-Fi can read what's sent. Set up HTTPS (below) before real patient data goes on the network.
+
+## HTTPS on the clinic machine
+
+1. Install [mkcert](https://github.com/FiloSottile/mkcert) (`winget install FiloSottile.mkcert`), then in a terminal run `mkcert -install`.
+2. Create a certificate for the addresses staff will use (the machine's fixed LAN IP and name), for example:
+   `mkcert -cert-file C:\xampp\apache\conf\ssl.crt\welldent.crt -key-file C:\xampp\apache\conf\ssl.key\welldent.key 192.168.1.10 clinic-pc localhost`
+3. In `C:\xampp\apache\conf\extra\httpd-ssl.conf`, point `SSLCertificateFile` and `SSLCertificateKeyFile` at those two files. Restart Apache and open `https://192.168.1.10/GitHub/WellDent/`.
+4. Make every other device trust the certificate: run `mkcert -CAROOT` to find `rootCA.pem`, copy it to each PC (install into **Trusted Root Certification Authorities**) and phone (Android: Settings → Security → Encryption & credentials → Install a certificate → CA certificate; iPhone: install the profile, then Settings → General → About → Certificate Trust Settings).
+5. Allow **Apache HTTP Server** through Windows Defender Firewall on Private networks (port 443).
+6. Add `'security' => ['force_https' => true]` to `config/config.local.php` so plain `http://` links redirect to HTTPS. The session cookie is marked Secure automatically on HTTPS.
+
+Keep `rootCA-key.pem` (in the `mkcert -CAROOT` folder) private and off other devices: anyone with it can make certificates your devices will trust.
+
+## Hardening the clinic machine
+
+These are server settings, outside the app:
+
+- `C:\xampp\php\php.ini`: `expose_php = Off`.
+- `C:\xampp\apache\conf\httpd.conf`: add `ServerTokens Prod` and `ServerSignature Off` so pages don't advertise the Apache/PHP versions.
+- `C:\xampp\mysql\bin\my.ini`: under `[mysqld]`, set `bind-address = 127.0.0.1` so MySQL isn't reachable from the network.
+- Give MySQL `root` a password and create a separate user for WellDent with rights on the `welldent` database only; put it in `config/config.local.php`.
+- Copy only the `WellDent` folder to the clinic machine, not the `.git` folder or other projects.
+
+Restart Apache and MySQL after changing these.

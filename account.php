@@ -12,8 +12,9 @@ if (is_post()) {
     if ($new !== ($_POST['confirm_password'] ?? '')) $errors[] = 'The new passwords do not match.';
     if (!$errors) {
         q('UPDATE users SET password_hash = ? WHERE id = ?', [password_hash($new, PASSWORD_DEFAULT), $user['id']]);
+        bind_session_to_password((int) $user['id']); // keep this session; every other one is signed out
         log_activity('password_changed', 'user', (int) $user['id']);
-        flash('success', 'Password updated.');
+        flash('success', 'Password updated. Any other device signed in as you has been signed out.');
         redirect('account.php');
     }
 }

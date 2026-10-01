@@ -140,6 +140,7 @@ p { margin: 0; }
 .side-account-menu { display: flex; flex-direction: column; gap: 2px; padding-top: 6px; }
 .side-account-menu a, .side-account-menu button { display: flex; align-items: center; gap: 14px; width: 100%; padding: 10px 12px 10px 16px; border: 0; border-radius: 12px; background: none; color: var(--side-ink); font: inherit; font-size: 14px; text-align: left; cursor: pointer; transition: background-color .15s, color .15s; }
 .side-account-menu .lbl { white-space: nowrap; }
+.side-account-menu form { display: contents; }
 .sidebar .lbl, .chair-card { transition: opacity .15s; }
 /* While the sidebar resizes, its text is faded out (see app.js) so nothing visibly reflows. */
 :root[data-sidebar-fade] .sidebar .lbl,

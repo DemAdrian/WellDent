@@ -43,8 +43,11 @@ if (is_post()) {
             flash('error', 'New password must be at least 8 characters.');
         } else {
             q('UPDATE users SET password_hash = ? WHERE id = ?', [password_hash($password, PASSWORD_DEFAULT), (int) input('id')]);
+            if ((int) input('id') === (int) $me['id']) {
+                bind_session_to_password((int) $me['id']);
+            }
             log_activity('user_password_reset', 'user', (int) input('id'));
-            flash('success', 'Password reset. Share it with the user privately.');
+            flash('success', 'Password reset and their other sessions signed out. Share it with the user privately.');
         }
     }
     redirect('settings.php');
@@ -121,6 +124,7 @@ layout_start('Settings', 'settings', ['subtitle' => 'Clinic users, phone access 
     <section class="card">
       <h2>Backup</h2>
       <p class="muted small" style="margin:10px 0 16px">Download a full copy of the database. Keep it on a USB drive or cloud folder, at least weekly.</p>
+      <p class="small" style="margin:-6px 0 16px"><b>The file holds every patient record and the users' password hashes, unencrypted.</b> Keep it in a password-protected or encrypted location, and don't send it by email or chat.</p>
       <form method="post"><?= csrf_field() ?><input type="hidden" name="action" value="backup"><button class="btn btn-primary" type="submit">Download backup (.sql)</button></form>
     </section>
   </div>

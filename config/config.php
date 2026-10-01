@@ -23,9 +23,16 @@ return [
 
     'timezone' => 'Asia/Manila',
 
+    'security' => [
+        'idle_minutes' => 30,    // sign out after this long without activity (0 = never)
+        'force_https'  => false, // true once HTTPS is set up: plain http:// requests get redirected
+        'debug'        => false, // true shows PHP errors on screen; keep false on the clinic machine
+    ],
+
     'reminders' => [
         'send_time' => '08:00', // reminders go out at this time, one day before
-        'template'  => 'Hi {first_name}, this is {clinic} reminding you of your {procedure} appointment on {date} at {time}. Please call us if you need to reschedule.',
+        // {procedure} is also available, but leaving it out keeps health details off lock screens and shared phones.
+        'template'  => 'Hi {first_name}, this is {clinic} reminding you of your appointment on {date} at {time}. Please call us if you need to reschedule.',
     ],
 
     // 'log' writes messages to storage/outbox.log instead of sending them.

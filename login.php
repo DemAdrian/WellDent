@@ -48,6 +48,7 @@ if (is_post()) {
       <span class="brand-mark">D</span>
       <span><strong><?= e(config('clinic.name')) ?></strong><small>WellDent+ clinic system</small></span>
     </div>
+    <?php foreach (take_flashes() as $f): ?><div class="flash flash-<?= e($f['type']) ?>" role="status"><?= e($f['message']) ?></div><?php endforeach; ?>
     <?php if ($error): ?><div class="flash flash-error"><?= e($error) ?></div><?php endif; ?>
     <?= csrf_field() ?>
     <div class="field"><label for="username">Username</label><input type="text" id="username" name="username" value="<?= e(input('username')) ?>" autocomplete="username" required autofocus></div>

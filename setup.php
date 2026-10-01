@@ -7,10 +7,12 @@ $problem = '';
 try {
     $userCount = (int) q_val('SELECT COUNT(*) FROM users');
 } catch (PDOException $ex) {
+    // The raw MySQL error stays in the log; this page is reachable by anyone before setup.
+    error_log('WellDent setup: ' . $ex->getMessage());
     $userCount = -1;
     $problem = str_contains($ex->getMessage(), 'Unknown database') || str_contains($ex->getMessage(), "doesn't exist")
         ? 'The database tables were not found. Import database/schema.sql in phpMyAdmin, then reload this page.'
-        : 'Could not connect to MySQL. Start MySQL in the XAMPP Control Panel and check config/config.php. (' . $ex->getMessage() . ')';
+        : 'Could not connect to MySQL. Start MySQL in the XAMPP Control Panel and check config/config.php (details in storage/php-errors.log).';
 }
 if ($userCount > 0) {
     redirect('login.php');

@@ -30,7 +30,7 @@ function theme_head(): string
         . "var d=p==='dark'||(p!=='light'&&window.matchMedia('(prefers-color-scheme: dark)').matches);"
         . "document.documentElement.setAttribute('data-theme',d?'dark':'light');"
         . "try{if(localStorage.getItem('welldent-sidebar')==='collapsed')document.documentElement.setAttribute('data-sidebar','collapsed')}catch(e){}})()</script>\n"
-        . '<link rel="stylesheet" href="assets/css/app.css?v=4">';
+        . '<link rel="stylesheet" href="assets/css/app.css?v=5">';
 }
 
 /** Current chair state for the sidebar card. */
@@ -111,7 +111,7 @@ function layout_start(string $title, string $active, array $opts = []): void
       <div class="side-account-menu">
         <button type="button" data-theme-toggle title="Theme"><?= icon('theme') ?><span class="lbl">Theme: <span data-theme-label>System</span></span></button>
         <a href="account.php" title="Change password"><?= icon('key') ?><span class="lbl">Change password</span></a>
-        <a href="logout.php" title="Sign out"><?= icon('logout') ?><span class="lbl">Sign out</span></a>
+        <form method="post" action="logout.php"><?= csrf_field() ?><button type="submit" title="Sign out"><?= icon('logout') ?><span class="lbl">Sign out</span></button></form>
       </div>
     </details>
     <div class="chair-card">

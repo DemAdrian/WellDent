@@ -1,0 +1,10 @@
+# No folder listings (e.g. /assets/).
+Options -Indexes
+
+# Never serve hidden files or folders such as .git or .htaccess.
+RedirectMatch 404 /\.
+
+# Docs, database dumps, logs and config backups aren't for the browser.
+<FilesMatch "\.(md|sql|log|ini|bak|dist)$">
+    Require all denied
+</FilesMatch>
