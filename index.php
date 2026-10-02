@@ -37,20 +37,20 @@ foreach (q_all('SELECT message FROM notices WHERE CURDATE() BETWEEN starts_on AN
     $attention[] = ['', $n['message'], null];
 }
 foreach (array_slice($lowStock, 0, 3) as $item) {
-    $attention[] = ['red', "{$item['name']} low: {$item['quantity']} {$item['unit']} left (min {$item['min_quantity']})", 'inventory.php?filter=low'];
+    $attention[] = ['red', "{$item['name']} low: {$item['quantity']} {$item['unit']} left (min {$item['min_quantity']})", url('inventory/') . '?filter=low'];
 }
 $pending = count(array_filter($today, fn($a) => $a['status'] === 'pending'));
 if ($pending) {
-    $attention[] = ['', "$pending appointment" . ($pending > 1 ? 's' : '') . ' today still unconfirmed', 'appointments.php'];
+    $attention[] = ['', "$pending appointment" . ($pending > 1 ? 's' : '') . ' today still unconfirmed', url('appointments/')];
 }
 $failed = (int) q_val("SELECT COUNT(*) FROM reminders WHERE status = 'failed'");
 if ($failed) {
-    $attention[] = ['red', "$failed reminder" . ($failed > 1 ? 's' : '') . ' failed to send', 'reminders.php?tab=failed'];
+    $attention[] = ['red', "$failed reminder" . ($failed > 1 ? 's' : '') . ' failed to send', url('reminders/') . '?tab=failed'];
 }
 $incomplete = (int) q_val("SELECT COUNT(DISTINCT p.id) FROM patients p JOIN appointments a ON a.patient_id = p.id
     WHERE p.status IN ('incomplete','draft') AND a.starts_at BETWEEN NOW() AND NOW() + INTERVAL 7 DAY AND a.status NOT IN ('cancelled','no_show')");
 if ($incomplete) {
-    $attention[] = ['', "$incomplete upcoming patient" . ($incomplete > 1 ? 's have' : ' has') . ' an incomplete chart', 'patients.php?status=incomplete'];
+    $attention[] = ['', "$incomplete upcoming patient" . ($incomplete > 1 ? 's have' : ' has') . ' an incomplete chart', url('patients/') . '?status=incomplete'];
 }
 
 $accounts = q_all('SELECT p.id, p.full_name, b.balance FROM patients p JOIN ' . BALANCES . " b ON b.patient_id = p.id
@@ -63,29 +63,29 @@ $name = $user['role'] === 'dentist' ? 'Dr. ' . end($nameParts) : $nameParts[0];
 
 layout_start("$greeting, $name", 'dashboard', [
     'subtitle' => 'A calm view of your clinic today',
-    'action'   => '<a class="btn btn-primary" href="appointment_form.php">+ New appointment</a>',
+    'action'   => '<a class="btn btn-primary" href="' . url('appointments/form.php') . '">+ New appointment</a>',
 ]);
 ?>
 <section class="grid-4">
-  <a class="card stat" href="appointments.php">
+  <a class="card stat" href="<?= url('appointments/') ?>">
     <i class="dot" style="background:var(--teal)"></i>
     <div class="label">Patients today</div>
     <div class="value"><?= count($today) ?></div>
     <div class="sub"><?= $confirmed ?> confirmed · <?= $waiting ?> waiting</div>
   </a>
-  <a class="card stat" href="patients.php?filter=balance">
+  <a class="card stat" href="<?= url('patients/') ?>?filter=balance">
     <i class="dot" style="background:var(--coral)"></i>
     <div class="label">Pending balances</div>
     <div class="value"><?= money($balances['total']) ?></div>
     <div class="sub"><?= (int) $balances['accounts'] ?> open accounts</div>
   </a>
-  <a class="card stat" href="reminders.php">
+  <a class="card stat" href="<?= url('reminders/') ?>">
     <i class="dot" style="background:#e0b23c"></i>
     <div class="label">Reminders scheduled</div>
     <div class="value"><?= (int) $reminders['total'] ?></div>
     <div class="sub"><?= (int) $reminders['due'] ?> due to send now</div>
   </a>
-  <a class="card stat" href="inventory.php?filter=low">
+  <a class="card stat" href="<?= url('inventory/') ?>?filter=low">
     <i class="dot" style="background:var(--blue)"></i>
     <div class="label">Low stock</div>
     <div class="value"><?= count($lowStock) ?></div>
@@ -98,11 +98,11 @@ layout_start("$greeting, $name", 'dashboard', [
     <section class="card">
       <h2>Today · <?= date('l, F j') ?></h2>
       <?php if (!$today): ?>
-        <p class="empty">No appointments today. <a href="appointment_form.php">Book one</a></p>
+        <p class="empty">No appointments today. <a href="<?= url('appointments/form.php') ?>">Book one</a></p>
       <?php else: ?>
         <div class="sched">
           <?php foreach ($today as $a): ?>
-            <a class="sched-row<?= in_array($a['status'], ['arrived', 'in_treatment'], true) ? ' is-now' : '' ?>" href="patient.php?id=<?= $a['patient_id'] ?>" style="color:inherit;text-decoration:none">
+            <a class="sched-row<?= in_array($a['status'], ['arrived', 'in_treatment'], true) ? ' is-now' : '' ?>" href="<?= url('patients/view.php') ?>?id=<?= $a['patient_id'] ?>" style="color:inherit;text-decoration:none">
               <span class="time"><?= fmt_time($a['starts_at']) ?></span>
               <span class="who-line"><strong><?= e($a['full_name']) ?></strong><small><?= e($a['procedure_name']) ?></small></span>
               <?= pill($a['status']) ?>
@@ -132,9 +132,9 @@ layout_start("$greeting, $name", 'dashboard', [
     <section class="card">
       <h2>Quick actions</h2>
       <div class="row">
-        <a class="btn btn-primary" href="patient_form.php">Add patient</a>
-        <a class="btn" href="payment.php">Log payment</a>
-        <a class="btn" href="inventory.php?open=stock-dialog">Stock in</a>
+        <a class="btn btn-primary" href="<?= url('patients/form.php') ?>">Add patient</a>
+        <a class="btn" href="<?= url('patients/payment.php') ?>">Log payment</a>
+        <a class="btn" href="<?= url('inventory/') ?>?open=stock-dialog">Stock in</a>
       </div>
     </section>
 
@@ -159,7 +159,7 @@ layout_start("$greeting, $name", 'dashboard', [
         <ul class="kv">
           <?php foreach ($accounts as $acc): ?>
             <li>
-              <a href="patient.php?id=<?= $acc['id'] ?>&amp;tab=billing" class="<?= $acc['balance'] > 0 ? '' : 'amount-credit' ?>" style="<?= $acc['balance'] > 0 ? 'color:inherit' : '' ?>">
+              <a href="<?= url('patients/view.php') ?>?id=<?= $acc['id'] ?>&amp;tab=billing" class="<?= $acc['balance'] > 0 ? '' : 'amount-credit' ?>" style="<?= $acc['balance'] > 0 ? 'color:inherit' : '' ?>">
                 <?= e($acc['full_name']) ?> · <?= money($acc['balance']) ?> <?= $acc['balance'] > 0 ? 'due' : 'credit' ?>
               </a>
             </li>

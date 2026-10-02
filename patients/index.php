@@ -1,5 +1,5 @@
 <?php
-require __DIR__ . '/includes/bootstrap.php';
+require dirname(__DIR__) . '/includes/bootstrap.php';
 require_login();
 
 $search = input('q');
@@ -40,12 +40,12 @@ $patients = q_all('SELECT p.*, b.balance, b.charged, u.name AS added_by,
     ORDER BY p.full_name LIMIT $perPage OFFSET " . (($page - 1) * $perPage), $params);
 $pages = max(1, (int) ceil($total / $perPage));
 
-$link = fn(array $changes) => 'patients.php?' . http_build_query(array_filter(array_merge(
+$link = fn(array $changes) => url('patients/') . '?' . http_build_query(array_filter(array_merge(
     ['q' => $search, 'filter' => $filter, 'status' => $status, 'care' => $care], $changes), fn($v) => $v !== '' && $v !== null));
 
 layout_start('Patients', 'patients', [
     'subtitle' => 'Searchable records for every patient',
-    'action'   => '<a class="btn btn-primary" href="patient_form.php">+ Add patient</a>',
+    'action'   => '<a class="btn btn-primary" href="' . url('patients/form.php') . '">+ Add patient</a>',
 ]);
 ?>
 <div class="toolbar">
@@ -54,7 +54,7 @@ layout_start('Patients', 'patients', [
     <input type="search" name="q" value="<?= e($search) ?>" placeholder="Search name, phone, email, or record ID" aria-label="Search patients" style="background:var(--panel);padding:16px 18px">
   </form>
   <div class="row">
-    <a class="btn<?= $filter === '' && $status === '' && $care === '' ? ' is-on' : '' ?>" href="patients.php<?= $search !== '' ? '?q=' . e(urlencode($search)) : '' ?>">All records</a>
+    <a class="btn<?= $filter === '' && $status === '' && $care === '' ? ' is-on' : '' ?>" href="<?= url('patients/') ?><?= $search !== '' ? '?q=' . e(urlencode($search)) : '' ?>">All records</a>
     <a class="btn<?= $filter === 'balance' ? ' is-on' : '' ?>" href="<?= e($link(['filter' => $filter === 'balance' ? '' : 'balance', 'page' => ''])) ?>">Balance due</a>
     <details class="user-menu">
       <summary class="btn<?= $status !== '' || $care !== '' ? ' is-on' : '' ?>">Filters</summary>
@@ -92,11 +92,11 @@ layout_start('Patients', 'patients', [
             </td>
             <td><?= pill($p['status']) ?></td>
             <td><?= $p['added_by'] ? e($p['added_by']) : '<span class="muted">—</span>' ?><br><small class="muted"><?= e(fmt_date($p['created_at'], 'M j, Y')) ?></small></td>
-            <td class="num"><a href="patient.php?id=<?= $p['id'] ?>" style="font-weight:600">Open →</a></td>
+            <td class="num"><a href="<?= url('patients/view.php') ?>?id=<?= $p['id'] ?>" style="font-weight:600">Open →</a></td>
           </tr>
         <?php endforeach; ?>
         <?php if (!$patients): ?>
-          <tr><td colspan="7" class="empty"><?= $search !== '' ? 'No patients match “' . e($search) . '”.' : 'No patients yet.' ?> <a href="patient_form.php">Add a patient</a></td></tr>
+          <tr><td colspan="7" class="empty"><?= $search !== '' ? 'No patients match “' . e($search) . '”.' : 'No patients yet.' ?> <a href="<?= url('patients/form.php') ?>">Add a patient</a></td></tr>
         <?php endif; ?>
       </tbody>
     </table>

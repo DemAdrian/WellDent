@@ -1,5 +1,5 @@
 <?php
-require __DIR__ . '/includes/bootstrap.php';
+require dirname(__DIR__) . '/includes/bootstrap.php';
 $me = require_login();
 require_perm('settings');
 
@@ -51,7 +51,7 @@ if (is_post()) {
             flash('success', 'Password reset and their other sessions signed out. Share it with the user privately.');
         }
     }
-    redirect('settings.php');
+    redirect(url('settings/'));
 }
 
 /** Writes a plain SQL dump of every table to the output. */
@@ -82,7 +82,6 @@ function lan_addresses(): array
 }
 
 $users = q_all('SELECT * FROM users ORDER BY is_active DESC, name');
-$path = rtrim(dirname($_SERVER['SCRIPT_NAME']), '/\\') . '/';
 
 layout_start('Settings', 'settings', ['subtitle' => 'Clinic users, phone access and backups']);
 ?>
@@ -116,7 +115,7 @@ layout_start('Settings', 'settings', ['subtitle' => 'Clinic users, phone access 
       <h2>Phone access</h2>
       <p class="muted small" style="margin-bottom:12px">Phones on the clinic Wi-Fi can open WellDent+ at:</p>
       <?php foreach (lan_addresses() as $ip): ?>
-        <p style="margin-bottom:6px"><code>http://<?= e($ip . $path) ?></code></p>
+        <p style="margin-bottom:6px"><code>http://<?= e($ip . url()) ?></code></p>
       <?php endforeach; ?>
       <?php if (!lan_addresses()): ?><p class="small">No network address found. Connect the laptop to the clinic Wi-Fi.</p><?php endif; ?>
       <p class="muted small" style="margin-top:12px">If a phone can't connect, allow Apache through Windows Defender Firewall (Private networks).</p>

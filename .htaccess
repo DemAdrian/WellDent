@@ -8,3 +8,14 @@ RedirectMatch 404 /\.
 <FilesMatch "\.(md|sql|log|ini|bak|dist)$">
     Require all denied
 </FilesMatch>
+
+# Each section's folder opens its index.php (patients/ -> patients/index.php).
+DirectoryIndex index.php
+
+# Old single-folder addresses (bookmarks, phone home screens) go to the new pages.
+RedirectMatch 301 ^(.*)/appointment_form\.php$ $1/appointments/form.php
+RedirectMatch 301 ^(.*)/patient_form\.php$ $1/patients/form.php
+RedirectMatch 301 ^(.*)/patient\.php$ $1/patients/view.php
+RedirectMatch 301 ^(.*)(?<!/patients)/payment\.php$ $1/patients/payment.php
+RedirectMatch 301 ^(.*)(?<!/auth)/(login|logout|account|setup)\.php$ $1/auth/$2.php
+RedirectMatch 301 ^(.*)/(appointments|patients|inventory|reminders|reports|settings)\.php$ $1/$2/

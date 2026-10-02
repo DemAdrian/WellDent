@@ -1,5 +1,5 @@
 <?php
-require __DIR__ . '/includes/bootstrap.php';
+require dirname(__DIR__) . '/includes/bootstrap.php';
 require_login();
 
 $from = valid_date(input('from')) ? input('from') : date('Y-m-01');
@@ -29,7 +29,7 @@ $totalAppts = array_sum($apptStatus);
 $subtitle = 'Records and activity for ' . fmt_date($from) . ' – ' . fmt_date($to);
 
 if (input('format') === 'pdf') {
-    require __DIR__ . '/includes/pdf.php';
+    require dirname(__DIR__) . '/includes/pdf.php';
     $due = '#e0785f';
     $pdf = new PdfReport('Clinic report', $subtitle, config('clinic.name'),
         'Generated ' . date('M j, Y g:i A') . ' by ' . current_user()['name']);
@@ -58,7 +58,7 @@ if (input('format') === 'pdf') {
 $query = http_build_query(['from' => $from, 'to' => $to, 'format' => 'pdf']);
 layout_start('Reports', 'reports', [
     'subtitle' => $subtitle,
-    'action'   => '<a class="btn" href="reports.php?' . e($query) . '">Download PDF</a>'
+    'action'   => '<a class="btn" href="' . url('reports/') . '?' . e($query) . '">Download PDF</a>'
         . '<button class="btn" onclick="window.print()">Print</button>',
 ]);
 ?>
@@ -69,9 +69,9 @@ layout_start('Reports', 'reports', [
     <button class="btn btn-primary" type="submit" style="align-self:flex-end">Apply</button>
   </div>
   <div class="row">
-    <a class="btn btn-sm" href="reports.php?from=<?= date('Y-m-d') ?>&amp;to=<?= date('Y-m-d') ?>">Today</a>
-    <a class="btn btn-sm" href="reports.php?from=<?= date('Y-m-01') ?>&amp;to=<?= date('Y-m-d') ?>">This month</a>
-    <a class="btn btn-sm" href="reports.php?from=<?= date('Y-01-01') ?>&amp;to=<?= date('Y-m-d') ?>">This year</a>
+    <a class="btn btn-sm" href="<?= url('reports/') ?>?from=<?= date('Y-m-d') ?>&amp;to=<?= date('Y-m-d') ?>">Today</a>
+    <a class="btn btn-sm" href="<?= url('reports/') ?>?from=<?= date('Y-m-01') ?>&amp;to=<?= date('Y-m-d') ?>">This month</a>
+    <a class="btn btn-sm" href="<?= url('reports/') ?>?from=<?= date('Y-01-01') ?>&amp;to=<?= date('Y-m-d') ?>">This year</a>
   </div>
 </form>
 
@@ -104,7 +104,7 @@ layout_start('Reports', 'reports', [
     <h2>Outstanding balances (all time)</h2>
     <div class="table-wrap"><table><thead><tr><th>Patient</th><th>Phone</th><th class="num">Charged</th><th class="num">Paid</th><th class="num">Balance</th></tr></thead><tbody>
       <?php foreach ($outstanding as $o): ?>
-        <tr><td><a href="patient.php?id=<?= $o['id'] ?>&amp;tab=billing"><?= e($o['full_name']) ?></a></td><td><?= e($o['phone'] ?: '—') ?></td>
+        <tr><td><a href="<?= url('patients/view.php') ?>?id=<?= $o['id'] ?>&amp;tab=billing"><?= e($o['full_name']) ?></a></td><td><?= e($o['phone'] ?: '—') ?></td>
           <td class="num"><?= money($o['charged']) ?></td><td class="num"><?= money($o['paid']) ?></td><td class="num amount-due"><?= money($o['balance']) ?></td></tr>
       <?php endforeach; ?>
       <?php if (!$outstanding): ?><tr><td colspan="5" class="empty">No outstanding balances.</td></tr><?php endif; ?>
@@ -128,7 +128,7 @@ layout_start('Reports', 'reports', [
       <?php foreach ($activity as $a): ?>
         <tr><td style="white-space:nowrap"><?= e(fmt_date($a['created_at'], 'M j, g:i A')) ?></td><td><?= e($a['name'] ?? '—') ?></td>
           <td><?= e(ucfirst(str_replace('_', ' ', $a['action']))) ?></td>
-          <td><?= $a['entity'] === 'patient' && $a['entity_id'] ? '<a href="patient.php?id=' . (int) $a['entity_id'] . '">' . e($a['details'] ?: 'Patient') . '</a>' : e($a['details'] ?? '') ?></td></tr>
+          <td><?= $a['entity'] === 'patient' && $a['entity_id'] ? '<a href="' . url('patients/view.php') . '?id=' . (int) $a['entity_id'] . '">' . e($a['details'] ?: 'Patient') . '</a>' : e($a['details'] ?? '') ?></td></tr>
       <?php endforeach; ?>
       <?php if (!$activity): ?><tr><td colspan="4" class="empty">No activity in this range.</td></tr><?php endif; ?>
     </tbody></table></div>

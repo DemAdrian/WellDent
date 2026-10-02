@@ -1,5 +1,5 @@
 <?php
-require __DIR__ . '/includes/bootstrap.php';
+require dirname(__DIR__) . '/includes/bootstrap.php';
 $user = require_login();
 
 if (is_post()) {
@@ -66,7 +66,7 @@ if (is_post()) {
         q('UPDATE inventory_items SET is_active = 0 WHERE id = ?', [(int) input('id')]);
         flash('success', 'Item removed from the list.');
     }
-    redirect('inventory.php' . (input('filter') === 'low' ? '?filter=low' : ''));
+    redirect(url('inventory/') . (input('filter') === 'low' ? '?filter=low' : ''));
 }
 
 $filter = input('filter');
@@ -103,8 +103,8 @@ layout_start('Inventory', 'inventory', [
     <input type="search" name="q" value="<?= e($search) ?>" placeholder="Search item, category or supplier" aria-label="Search inventory" style="background:var(--panel)">
   </form>
   <div class="row">
-    <a class="btn<?= $filter !== 'low' ? ' is-on' : '' ?>" href="inventory.php">All items</a>
-    <a class="btn<?= $filter === 'low' ? ' is-on' : '' ?>" href="inventory.php?filter=low">Low stock</a>
+    <a class="btn<?= $filter !== 'low' ? ' is-on' : '' ?>" href="<?= url('inventory/') ?>">All items</a>
+    <a class="btn<?= $filter === 'low' ? ' is-on' : '' ?>" href="<?= url('inventory/') ?>?filter=low">Low stock</a>
     <button class="btn" data-open="#item-dialog" data-fill='{"id":"","name":"","category":"","unit":"pcs","quantity":"0","min_quantity":"0","supplier":"","dialog_title":"Add item"}'>+ Add item</button>
   </div>
 </div>

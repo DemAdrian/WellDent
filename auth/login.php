@@ -1,15 +1,15 @@
 <?php
-require __DIR__ . '/includes/bootstrap.php';
+require dirname(__DIR__) . '/includes/bootstrap.php';
 
 try {
     if ((int) q_val('SELECT COUNT(*) FROM users') === 0) {
-        redirect('setup.php');
+        redirect(url('auth/setup.php'));
     }
 } catch (PDOException $ex) {
-    redirect('setup.php');
+    redirect(url('auth/setup.php'));
 }
 if (current_user()) {
-    redirect('index.php');
+    redirect(url());
 }
 
 $error = '';
@@ -32,7 +32,7 @@ if (is_post()) {
     } elseif (attempt_login($username, (string) ($_POST['password'] ?? ''))) {
         clear_failed_logins($username, $ip);
         log_activity('login', null, null, null, (int) $_SESSION['user_id']);
-        redirect('index.php');
+        redirect(url());
     } else {
         record_failed_login($username, $ip);
         $wait = login_lockout_seconds($username, $ip);

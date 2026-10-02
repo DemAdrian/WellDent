@@ -83,15 +83,27 @@ C:\xampp\php\php.exe C:\xampp\htdocs\GitHub\WellDent\cron\send_reminders.php
 
 ## Project layout
 
+Each page handles its own form POSTs. Link between pages with `url('patients/view.php')`, which works from any folder.
+
 ```
-index.php, appointments.php, patients.php, patient.php, ...   pages (each handles its own form POSTs)
-includes/        bootstrap, db helpers, auth/roles, layout, reminders, dental chart
-assets/          app.css, app.js
+index.php        dashboard
+appointments/    index.php (day/week schedule, waitlist, notices), form.php (book / reschedule)
+patients/        index.php (list), view.php (record, chart, billing), form.php (add / edit), payment.php
+inventory/       index.php
+reminders/       index.php
+reports/         index.php (screen, print and PDF download)
+settings/        index.php (admin)
+auth/            login.php, logout.php, account.php (change password), setup.php (first run)
+includes/        bootstrap, db helpers, auth/roles, layout, reminders, dental chart, PDF writer; not web-accessible
+assets/          css/app.css, js/app.js
 config/          config.php (+ your config.local.php)
 database/        schema.sql, demo_data.sql
 cron/            send_reminders.php
-storage/         outbox.log (test-mode messages); not web-accessible
+docs/            USER_GUIDE.md (for clinic staff)
+storage/         outbox.log (test-mode messages), php-errors.log; not web-accessible
 ```
+
+The old single-folder addresses (`patients.php`, `patient.php?id=…`, `login.php`, …) redirect to the new ones, so existing bookmarks keep working.
 
 ## Security notes
 

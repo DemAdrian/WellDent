@@ -1,10 +1,10 @@
 <?php
-require __DIR__ . '/includes/bootstrap.php';
+require dirname(__DIR__) . '/includes/bootstrap.php';
 require_login();
 
 $view = input('view', 'day') === 'week' ? 'week' : 'day';
 $date = valid_date(input('date')) ? input('date') : date('Y-m-d');
-$self = fn(array $extra = []) => 'appointments.php?' . http_build_query(array_merge(['view' => $view, 'date' => $date], $extra));
+$self = fn(array $extra = []) => url('appointments/') . '?' . http_build_query(array_merge(['view' => $view, 'date' => $date], $extra));
 
 if (is_post()) {
     verify_csrf();
@@ -98,14 +98,14 @@ $counts = array_count_values(array_column($appointments, 'status'));
 
 layout_start('Appointments', 'appointments', [
     'subtitle' => 'Chair-aware scheduling with live confirmations and delays',
-    'action'   => '<a class="btn btn-primary" href="appointment_form.php?date=' . e($date) . '">+ New appointment</a>',
+    'action'   => '<a class="btn btn-primary" href="' . url('appointments/form.php') . '?date=' . e($date) . '">+ New appointment</a>',
 ]);
 ?>
 <div class="toolbar">
   <div class="row">
-    <a class="btn<?= $view === 'day' ? ' is-on' : '' ?>" href="appointments.php?view=day&amp;date=<?= e($date) ?>">Day</a>
-    <a class="btn<?= $view === 'week' ? ' is-on' : '' ?>" href="appointments.php?view=week&amp;date=<?= e($date) ?>">Week</a>
-    <a class="btn" href="appointments.php?view=<?= $view ?>">Today</a>
+    <a class="btn<?= $view === 'day' ? ' is-on' : '' ?>" href="<?= url('appointments/') ?>?view=day&amp;date=<?= e($date) ?>">Day</a>
+    <a class="btn<?= $view === 'week' ? ' is-on' : '' ?>" href="<?= url('appointments/') ?>?view=week&amp;date=<?= e($date) ?>">Week</a>
+    <a class="btn" href="<?= url('appointments/') ?>?view=<?= $view ?>">Today</a>
   </div>
   <div class="row">
     <a class="btn" href="<?= e($self(['date' => $prev])) ?>" aria-label="Previous">‹</a>
@@ -135,7 +135,7 @@ layout_start('Appointments', 'appointments', [
       <div class="day-table">
         <div class="day-head"><span>TIME</span><span>CHAIR<?= config('clinic.chairs') > 1 ? 'S' : ' 1' ?> · <?= round($bookedMinutes / 60, 1) ?> of <?= round($openMinutes / 60, 1) ?> hours booked</span></div>
         <?php if (!$appointments): ?>
-          <div class="slot"><span class="t"></span><p class="open-slot">Nothing booked on this day. <a href="appointment_form.php?date=<?= e($date) ?>">Book an appointment</a></p></div>
+          <div class="slot"><span class="t"></span><p class="open-slot">Nothing booked on this day. <a href="<?= url('appointments/form.php') ?>?date=<?= e($date) ?>">Book an appointment</a></p></div>
         <?php endif; ?>
         <?php foreach ($appointments as $a): ?>
           <div class="slot">
@@ -144,7 +144,7 @@ layout_start('Appointments', 'appointments', [
               <div class="appt-top"><strong><?= e($a['full_name']) ?></strong><?= pill($a['status']) ?></div>
               <div class="meta"><?= e($a['procedure_name']) ?> · <?= (int) $a['duration_min'] ?> min<?= config('clinic.chairs') > 1 ? ' · Chair ' . (int) $a['chair'] : '' ?><?= $a['notes'] ? ' · ' . e($a['notes']) : '' ?></div>
               <div class="actions">
-                <a href="appointment_form.php?id=<?= $a['id'] ?>">Reschedule</a> ·
+                <a href="<?= url('appointments/form.php') ?>?id=<?= $a['id'] ?>">Reschedule</a> ·
                 <form method="post" class="row" style="display:inline-flex">
                   <?= csrf_field() ?><input type="hidden" name="action" value="status"><input type="hidden" name="id" value="<?= $a['id'] ?>">
                   <label for="st<?= $a['id'] ?>" style="font-weight:600;color:var(--teal-d)">Update status</label>
@@ -153,7 +153,7 @@ layout_start('Appointments', 'appointments', [
                   </select>
                   <noscript><button class="btn btn-sm">Save</button></noscript>
                 </form> ·
-                <a href="patient.php?id=<?= $a['patient_id'] ?>">View patient</a>
+                <a href="<?= url('patients/view.php') ?>?id=<?= $a['patient_id'] ?>">View patient</a>
               </div>
             </div>
           </div>
@@ -165,9 +165,9 @@ layout_start('Appointments', 'appointments', [
             $d = date('Y-m-d', strtotime("$rangeStart +$i day"));
             $dayAppts = array_filter($appointments, fn($a) => substr($a['starts_at'], 0, 10) === $d); ?>
           <div class="week-day<?= $d === date('Y-m-d') ? ' today' : '' ?>">
-            <h3><a href="appointments.php?view=day&amp;date=<?= $d ?>" style="color:inherit"><?= date('D j', strtotime($d)) ?></a></h3>
+            <h3><a href="<?= url('appointments/') ?>?view=day&amp;date=<?= $d ?>" style="color:inherit"><?= date('D j', strtotime($d)) ?></a></h3>
             <?php foreach ($dayAppts as $a): ?>
-              <a class="week-item <?= e($a['status']) ?>" href="appointment_form.php?id=<?= $a['id'] ?>">
+              <a class="week-item <?= e($a['status']) ?>" href="<?= url('appointments/form.php') ?>?id=<?= $a['id'] ?>">
                 <b><?= fmt_time($a['starts_at']) ?></b><?= e($a['full_name']) ?><br><span class="muted"><?= e($a['procedure_name']) ?></span>
               </a>
             <?php endforeach; ?>
@@ -195,7 +195,7 @@ layout_start('Appointments', 'appointments', [
         <?php foreach ($waitlist as $w): ?>
           <li class="row">
             <span class="spacer"><?= e($w['full_name']) ?> · <?= e($w['procedure_name']) ?></span>
-            <a class="btn btn-sm" href="appointment_form.php?<?= e(http_build_query(['patient_id' => $w['patient_id'], 'procedure' => $w['procedure_name'], 'waitlist_id' => $w['id'], 'date' => $date])) ?>">Fill open slot</a>
+            <a class="btn btn-sm" href="<?= url('appointments/form.php') ?>?<?= e(http_build_query(['patient_id' => $w['patient_id'], 'procedure' => $w['procedure_name'], 'waitlist_id' => $w['id'], 'date' => $date])) ?>">Fill open slot</a>
             <form method="post"><?= csrf_field() ?><input type="hidden" name="action" value="waitlist_remove"><input type="hidden" name="id" value="<?= $w['id'] ?>"><button class="link-btn" title="Remove" aria-label="Remove <?= e($w['full_name']) ?> from waitlist">✕</button></form>
           </li>
         <?php endforeach; ?>

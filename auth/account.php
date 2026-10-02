@@ -1,5 +1,5 @@
 <?php
-require __DIR__ . '/includes/bootstrap.php';
+require dirname(__DIR__) . '/includes/bootstrap.php';
 $user = require_login();
 
 $errors = [];
@@ -15,7 +15,7 @@ if (is_post()) {
         bind_session_to_password((int) $user['id']); // keep this session; every other one is signed out
         log_activity('password_changed', 'user', (int) $user['id']);
         flash('success', 'Password updated. Any other device signed in as you has been signed out.');
-        redirect('account.php');
+        redirect(url('auth/account.php'));
     }
 }
 

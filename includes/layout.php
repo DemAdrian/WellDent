@@ -30,7 +30,7 @@ function theme_head(): string
         . "var d=p==='dark'||(p!=='light'&&window.matchMedia('(prefers-color-scheme: dark)').matches);"
         . "document.documentElement.setAttribute('data-theme',d?'dark':'light');"
         . "try{if(localStorage.getItem('welldent-sidebar')==='collapsed')document.documentElement.setAttribute('data-sidebar','collapsed')}catch(e){}})()</script>\n"
-        . '<link rel="stylesheet" href="assets/css/app.css?v=6">';
+        . '<link rel="stylesheet" href="' . url('assets/css/app.css?v=6') . '">';
 }
 
 /** Current chair state for the sidebar card. */
@@ -67,15 +67,15 @@ function layout_start(string $title, string $active, array $opts = []): void
 {
     $user = current_user();
     $nav = [
-        'dashboard'    => ['index.php', 'Dashboard'],
-        'appointments' => ['appointments.php', 'Appointments'],
-        'patients'     => ['patients.php', 'Patients'],
-        'inventory'    => ['inventory.php', 'Inventory'],
-        'reminders'    => ['reminders.php', 'Reminders'],
-        'reports'      => ['reports.php', 'Reports'],
+        'dashboard'    => [url(), 'Dashboard'],
+        'appointments' => [url('appointments/'), 'Appointments'],
+        'patients'     => [url('patients/'), 'Patients'],
+        'inventory'    => [url('inventory/'), 'Inventory'],
+        'reminders'    => [url('reminders/'), 'Reminders'],
+        'reports'      => [url('reports/'), 'Reports'],
     ];
     if (can('settings')) {
-        $nav['settings'] = ['settings.php', 'Settings'];
+        $nav['settings'] = [url('settings/'), 'Settings'];
     }
     [$chairState, $chairNote] = chair_status();
     ?>
@@ -91,7 +91,7 @@ function layout_start(string $title, string $active, array $opts = []): void
 <div class="shell">
   <aside class="sidebar">
     <div class="side-top">
-      <a class="brand" href="index.php" title="<?= e(config('clinic.name')) ?>">
+      <a class="brand" href="<?= url() ?>" title="<?= e(config('clinic.name')) ?>">
         <span class="brand-mark">D</span>
         <span class="lbl"><strong><?= e(config('clinic.name')) ?></strong><small><?= e(config('clinic.tagline')) ?></small></span>
       </a>
@@ -110,8 +110,8 @@ function layout_start(string $title, string $active, array $opts = []): void
       </summary>
       <div class="side-account-menu">
         <button type="button" data-theme-toggle title="Theme"><?= icon('theme') ?><span class="lbl">Theme: <span data-theme-label>System</span></span></button>
-        <a href="account.php" title="Change password"><?= icon('key') ?><span class="lbl">Change password</span></a>
-        <form method="post" action="logout.php"><?= csrf_field() ?><button type="submit" title="Sign out"><?= icon('logout') ?><span class="lbl">Sign out</span></button></form>
+        <a href="<?= url('auth/account.php') ?>" title="Change password"><?= icon('key') ?><span class="lbl">Change password</span></a>
+        <form method="post" action="<?= url('auth/logout.php') ?>"><?= csrf_field() ?><button type="submit" title="Sign out"><?= icon('logout') ?><span class="lbl">Sign out</span></button></form>
       </div>
     </details>
     <div class="chair-card">
@@ -141,7 +141,7 @@ function layout_end(): void
     ?>
   </main>
 </div>
-<script src="assets/js/app.js?v=4"></script>
+<script src="<?= url('assets/js/app.js?v=4') ?>"></script>
 </body>
 </html>
 <?php

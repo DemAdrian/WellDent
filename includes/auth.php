@@ -61,7 +61,7 @@ function require_login(): array
 {
     $user = current_user();
     if (!$user) {
-        redirect('login.php');
+        redirect(url('auth/login.php'));
     }
     return $user;
 }

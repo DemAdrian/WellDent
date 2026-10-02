@@ -1,5 +1,5 @@
 <?php
-require __DIR__ . '/includes/bootstrap.php';
+require dirname(__DIR__) . '/includes/bootstrap.php';
 require_login();
 
 $tab = in_array(input('tab'), ['scheduled', 'sent', 'failed', 'all'], true) ? input('tab') : 'scheduled';
@@ -38,7 +38,7 @@ if (is_post()) {
             flash('success', 'Reminder scheduled.');
         }
     }
-    redirect('reminders.php?tab=' . $tab);
+    redirect(url('reminders/') . '?tab=' . $tab);
 }
 
 $where = $tab === 'all' ? '' : 'WHERE r.status = ?';
@@ -60,7 +60,7 @@ layout_start('Reminders', 'reminders', [
 <div class="toolbar">
   <nav class="tabs" style="margin:0">
     <?php foreach (['scheduled' => 'Scheduled', 'sent' => 'Sent', 'failed' => 'Failed', 'all' => 'All'] as $k => $lbl): ?>
-      <a href="reminders.php?tab=<?= $k ?>" class="<?= $tab === $k ? 'active' : '' ?>"><?= $lbl ?><?= $k !== 'all' && !empty($counts[$k]) ? ' (' . (int) $counts[$k] . ')' : '' ?></a>
+      <a href="<?= url('reminders/') ?>?tab=<?= $k ?>" class="<?= $tab === $k ? 'active' : '' ?>"><?= $lbl ?><?= $k !== 'all' && !empty($counts[$k]) ? ' (' . (int) $counts[$k] . ')' : '' ?></a>
     <?php endforeach; ?>
   </nav>
   <button class="btn" data-open="#reminder-dialog">+ Custom reminder</button>
@@ -73,7 +73,7 @@ layout_start('Reminders', 'reminders', [
       <?php foreach ($reminders as $r): ?>
         <tr>
           <td style="white-space:nowrap"><?= e(fmt_date($r['send_at'], 'M j, g:i A')) ?></td>
-          <td><a href="patient.php?id=<?= $r['patient_id'] ?>"><?= e($r['full_name']) ?></a><br><small class="muted"><?= e($r['recipient']) ?></small></td>
+          <td><a href="<?= url('patients/view.php') ?>?id=<?= $r['patient_id'] ?>"><?= e($r['full_name']) ?></a><br><small class="muted"><?= e($r['recipient']) ?></small></td>
           <td><?= $r['channel'] === 'sms' ? 'SMS' : 'Email' ?></td>
           <td class="small" style="max-width:420px"><?= e($r['message']) ?><?= $r['error'] ? '<br><span class="amount-due">' . e($r['error']) . '</span>' : '' ?></td>
           <td><?= pill($r['status']) ?></td>

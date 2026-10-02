@@ -1,5 +1,5 @@
 <?php
-require __DIR__ . '/includes/bootstrap.php';
+require dirname(__DIR__) . '/includes/bootstrap.php';
 $user = require_login();
 
 $id = (int) input('id');
@@ -100,7 +100,7 @@ if (is_post()) {
             log_activity('patient_created', 'patient', $id, $values['full_name']);
             flash('success', $draft ? 'Draft saved. Finish the chart when you have the details.' : 'Patient created.');
         }
-        redirect('patient.php?id=' . $id . '&tab=info');
+        redirect(url('patients/view.php') . '?id=' . $id . '&tab=info');
     }
 }
 
@@ -184,7 +184,7 @@ layout_start($patient ? 'Edit patient' : 'Add patient', 'patients', [
           <?php if (!$patient || $patient['status'] === 'draft'): ?>
             <button class="btn" type="submit" name="submit" value="draft">Save as draft</button>
           <?php endif; ?>
-          <?php if ($patient): ?><a href="patient.php?id=<?= $id ?>">Cancel</a><?php endif; ?>
+          <?php if ($patient): ?><a href="<?= url('patients/view.php') ?>?id=<?= $id ?>">Cancel</a><?php endif; ?>
         </div>
       </section>
       <section class="card">

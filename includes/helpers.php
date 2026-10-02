@@ -22,6 +22,25 @@ function money($amount): string
     return '₱' . number_format(abs((float) $amount), ((float) $amount == floor((float) $amount)) ? 0 : 2);
 }
 
+/**
+ * Address of a page or asset, given its path inside the app folder: url('patients/view.php').
+ * Works from any folder depth and wherever the app is installed (e.g. /GitHub/WellDent/).
+ */
+function url(string $path = ''): string
+{
+    static $base = null;
+    if ($base === null) {
+        // The running script's path inside the app (/patients/view.php) is the tail of its URL.
+        $root = str_replace('\\', '/', (string) realpath(APP_ROOT));
+        $script = str_replace('\\', '/', (string) realpath($_SERVER['SCRIPT_FILENAME'] ?? ''));
+        $name = (string) ($_SERVER['SCRIPT_NAME'] ?? '');
+        $inApp = $root !== '' && stripos($script, $root . '/') === 0;
+        $tail = $inApp ? substr($script, strlen($root)) : '';
+        $base = $inApp && strcasecmp(substr($name, -strlen($tail)), $tail) === 0 ? substr($name, 0, -strlen($tail)) : '';
+    }
+    return $base . '/' . ltrim($path, '/');
+}
+
 function redirect(string $url): never
 {
     header('Location: ' . $url);

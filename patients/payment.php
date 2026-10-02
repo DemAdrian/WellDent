@@ -1,5 +1,5 @@
 <?php
-require __DIR__ . '/includes/bootstrap.php';
+require dirname(__DIR__) . '/includes/bootstrap.php';
 $user = require_login();
 
 $values = [
@@ -29,7 +29,7 @@ if (is_post()) {
             [$patientId, round((float) $values['amount'], 2), $values['method'], nullable($values['reference']), nullable($values['notes']), $values['paid_on'], $user['id']]);
         log_activity('payment_logged', 'patient', $patientId, money($values['amount']) . ' ' . $values['method']);
         flash('success', money($values['amount']) . ' payment recorded.');
-        redirect("patient.php?id=$patientId&tab=billing");
+        redirect(url('patients/view.php') . "?id=$patientId&tab=billing");
     }
 }
 
@@ -56,6 +56,6 @@ layout_start('Log payment', 'patients', ['subtitle' => 'Record a payment against
     <div class="field"><label for="reference">Reference / OR no.</label><input type="text" id="reference" name="reference" maxlength="80" value="<?= e($values['reference']) ?>" placeholder="GCash ref, OR number"></div>
     <div class="field span-2"><label for="notes">Notes</label><input type="text" id="notes" name="notes" maxlength="255" value="<?= e($values['notes']) ?>"></div>
   </div>
-  <div class="row"><button class="btn btn-primary" type="submit">Record payment</button><a class="btn" href="<?= $values['patient_id'] ? 'patient.php?id=' . (int) $values['patient_id'] . '&amp;tab=billing' : 'index.php' ?>">Cancel</a></div>
+  <div class="row"><button class="btn btn-primary" type="submit">Record payment</button><a class="btn" href="<?= $values['patient_id'] ? url('patients/view.php') . '?id=' . (int) $values['patient_id'] . '&amp;tab=billing' : url() ?>">Cancel</a></div>
 </form>
 <?php layout_end();

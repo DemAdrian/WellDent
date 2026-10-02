@@ -1,7 +1,7 @@
 <?php
 // First-run setup: checks the database and creates the first admin account.
 // Locks itself once any user exists.
-require __DIR__ . '/includes/bootstrap.php';
+require dirname(__DIR__) . '/includes/bootstrap.php';
 
 $problem = '';
 try {
@@ -15,7 +15,7 @@ try {
         : 'Could not connect to MySQL. Start MySQL in the XAMPP Control Panel and check config/config.php (details in storage/php-errors.log).';
 }
 if ($userCount > 0) {
-    redirect('login.php');
+    redirect(url('auth/login.php'));
 }
 
 $errors = [];
@@ -32,7 +32,7 @@ if ($userCount === 0 && is_post()) {
             [$name, $username, password_hash($password, PASSWORD_DEFAULT)]);
         attempt_login($username, $password);
         flash('success', 'Welcome! Your admin account is ready.');
-        redirect('index.php');
+        redirect(url());
     }
 }
 ?>

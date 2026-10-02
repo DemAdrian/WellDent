@@ -1,6 +1,6 @@
 <?php
-require __DIR__ . '/includes/bootstrap.php';
-require __DIR__ . '/includes/dental_chart.php';
+require dirname(__DIR__) . '/includes/bootstrap.php';
+require dirname(__DIR__) . '/includes/dental_chart.php';
 $user = require_login();
 
 $id = (int) input('id');
@@ -10,7 +10,7 @@ if (!$patient) {
     exit('Patient not found.');
 }
 $tab = in_array(input('tab'), ['chart', 'billing', 'info'], true) ? input('tab') : 'chart';
-$back = fn(string $tab) => "patient.php?id=$id&tab=$tab";
+$back = fn(string $tab) => url('patients/view.php') . "?id=$id&tab=$tab";
 
 if (is_post()) {
     verify_csrf();
@@ -118,7 +118,7 @@ if (is_post()) {
             : 'Patient restored. Review the chart to mark it complete.'
                 . ($restored ? " $restored upcoming appointment(s) were re-opened as Pending; confirm them with the patient." : '')
                 . ($skipped ? " $skipped could not be re-opened because the slot is now taken; book those again." : ''));
-        redirect($action === 'archive' ? 'patients.php' : 'patient_form.php?id=' . $id);
+        redirect($action === 'archive' ? url('patients/') : url('patients/form.php') . '?id=' . $id);
     }
 }
 
@@ -158,7 +158,7 @@ $balance = (float) $patient['balance'];
 
 layout_start($patient['full_name'], 'patients', ['subtitle' => $patient['care_type'] . ' · ' . PATIENT_STATUSES[$patient['status']] . ' record']);
 ?>
-<a class="back no-print" href="patients.php">← Back to Patients</a>
+<a class="back no-print" href="<?= url('patients/') ?>">← Back to Patients</a>
 
 <section class="card profile">
   <span class="avatar avatar-2 avatar-lg"><?= e(initials($patient['full_name'])) ?></span>
@@ -171,8 +171,8 @@ layout_start($patient['full_name'], 'patients', ['subtitle' => $patient['care_ty
     <strong class="<?= $balance > 0 ? 'amount-due' : 'amount-credit' ?>"><?= money($balance) ?></strong>
   </div>
   <div class="row no-print">
-    <a class="btn btn-sm" href="appointment_form.php?patient_id=<?= $id ?>">Book</a>
-    <a class="btn btn-sm" href="payment.php?patient_id=<?= $id ?>">Log payment</a>
+    <a class="btn btn-sm" href="<?= url('appointments/form.php') ?>?patient_id=<?= $id ?>">Book</a>
+    <a class="btn btn-sm" href="<?= url('patients/payment.php') ?>?patient_id=<?= $id ?>">Log payment</a>
     <?php if (can('patients.archive')): ?>
       <form method="post" data-confirm="<?= $patient['status'] === 'archived' ? 'Restore this patient?' : 'Archive this patient? Their records are kept but hidden from lists. Upcoming appointments, reminders and waitlist entries are cancelled.' ?>">
         <?= csrf_field() ?><input type="hidden" name="action" value="<?= $patient['status'] === 'archived' ? 'restore' : 'archive' ?>">
@@ -257,7 +257,7 @@ layout_start($patient['full_name'], 'patients', ['subtitle' => $patient['care_ty
     </section>
 
     <section class="card">
-      <div class="card-head"><h2>Payments</h2><a class="btn btn-sm btn-primary no-print" href="payment.php?patient_id=<?= $id ?>">+ Log payment</a></div>
+      <div class="card-head"><h2>Payments</h2><a class="btn btn-sm btn-primary no-print" href="<?= url('patients/payment.php') ?>?patient_id=<?= $id ?>">+ Log payment</a></div>
       <div class="table-wrap"><table>
         <thead><tr><th>Date</th><th>Method</th><th>Reference</th><th>Received by</th><th class="num">Amount</th><?php if (can('billing.delete')): ?><th></th><?php endif; ?></tr></thead>
         <tbody>
@@ -304,7 +304,7 @@ layout_start($patient['full_name'], 'patients', ['subtitle' => $patient['care_ty
 <?php else: ?>
   <div class="stack">
     <section class="card">
-      <div class="card-head"><h2>Patient information</h2><a class="btn btn-sm no-print" href="patient_form.php?id=<?= $id ?>">Edit</a></div>
+      <div class="card-head"><h2>Patient information</h2><a class="btn btn-sm no-print" href="<?= url('patients/form.php') ?>?id=<?= $id ?>">Edit</a></div>
       <dl class="info-grid">
         <?php foreach ([
             'Record ID' => $patient['record_no'], 'Birth date' => fmt_date($patient['birth_date']), 'Sex' => ucfirst((string) $patient['sex']),
@@ -321,7 +321,7 @@ layout_start($patient['full_name'], 'patients', ['subtitle' => $patient['care_ty
     </section>
 
     <section class="card">
-      <div class="card-head"><h2>Appointment history</h2><a class="btn btn-sm btn-primary no-print" href="appointment_form.php?patient_id=<?= $id ?>">+ Book</a></div>
+      <div class="card-head"><h2>Appointment history</h2><a class="btn btn-sm btn-primary no-print" href="<?= url('appointments/form.php') ?>?patient_id=<?= $id ?>">+ Book</a></div>
       <div class="table-wrap"><table>
         <thead><tr><th>Date</th><th>Procedure</th><th>Dentist</th><th>Status</th><th></th></tr></thead>
         <tbody>
@@ -331,7 +331,7 @@ layout_start($patient['full_name'], 'patients', ['subtitle' => $patient['care_ty
               <td><?= e($a['procedure_name']) ?></td>
               <td><?= e($a['dentist'] ?? '—') ?></td>
               <td><?= pill($a['status']) ?></td>
-              <td class="num"><a href="appointment_form.php?id=<?= $a['id'] ?>">Edit</a></td>
+              <td class="num"><a href="<?= url('appointments/form.php') ?>?id=<?= $a['id'] ?>">Edit</a></td>
             </tr>
           <?php endforeach; ?>
           <?php if (!$appointments): ?><tr><td colspan="5" class="empty">No appointments yet.</td></tr><?php endif; ?>

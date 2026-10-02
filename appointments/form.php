@@ -1,5 +1,5 @@
 <?php
-require __DIR__ . '/includes/bootstrap.php';
+require dirname(__DIR__) . '/includes/bootstrap.php';
 $user = require_login();
 
 $id = (int) input('id');
@@ -102,7 +102,7 @@ if (is_post()) {
             schedule_appointment_reminders($id);
         }
         flash('success', $appt ? 'Appointment updated.' : 'Appointment booked.');
-        redirect('appointments.php?date=' . $values['date']);
+        redirect(url('appointments/') . '?date=' . $values['date']);
     }
 }
 
@@ -128,7 +128,7 @@ layout_start($appt ? 'Reschedule appointment' : 'New appointment', 'appointments
             <option value="<?= $p['id'] ?>"<?= selected($p['id'], $values['patient_id']) ?>><?= e($p['full_name']) ?><?= $p['phone'] ? ' · ' . e($p['phone']) : '' ?></option>
           <?php endforeach; ?>
         </select>
-        <span class="hint">Not listed? <a href="patient_form.php">Add the patient first</a>.</span>
+        <span class="hint">Not listed? <a href="<?= url('patients/form.php') ?>">Add the patient first</a>.</span>
       </div>
       <div class="field"><label for="status">Status</label>
         <select id="status" name="status"><?php foreach (APPOINTMENT_STATUSES as $k => $lbl): ?><option value="<?= $k ?>"<?= selected($k, $values['status']) ?>><?= $lbl ?></option><?php endforeach; ?></select>
@@ -158,7 +158,7 @@ layout_start($appt ? 'Reschedule appointment' : 'New appointment', 'appointments
     </div>
     <div class="row" style="margin-top:20px">
       <button class="btn btn-primary" type="submit"><?= $appt ? 'Save changes' : 'Book appointment' ?></button>
-      <a class="btn" href="appointments.php?date=<?= e($values['date']) ?>">Cancel</a>
+      <a class="btn" href="<?= url('appointments/') ?>?date=<?= e($values['date']) ?>">Cancel</a>
     </div>
   </form>
 
