@@ -472,9 +472,23 @@ dialog[open]::backdrop { animation: fade-in .22s ease; }
 }
 
 @media print {
+  @page { margin: 14mm; }
   .sidebar, .head-actions, .no-print, .flash { display: none !important; }
   .shell { display: block; }
   .main { padding: 0; }
-  .card { box-shadow: none; border: 1px solid #ddd; break-inside: avoid; }
+  .page-head { margin-bottom: 18px; }
+  .card { box-shadow: none; border: 1px solid #ddd; padding: 16px; break-inside: avoid; }
+  /* Long tables may run across pages; keeping them whole left big blank gaps. */
+  .card:has(.table-wrap) { break-inside: auto; }
+  .card > h2 { break-after: avoid; }
+  .table-wrap { overflow: visible; }
+  thead { display: table-header-group; }
+  tr { break-inside: avoid; }
+  td { padding: 8px 10px; }
+  a { color: inherit; }
+  /* The paper is narrow enough to trip the tablet/phone layouts above; keep the desktop grid. */
+  .grid-4 { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin-bottom: 18px; }
+  .layout-half { grid-template-columns: 1fr 1fr; gap: 16px; }
+  .stat .value { font-size: 24px; margin: 8px 0; }
   body { background: #fff; }
 }

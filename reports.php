@@ -26,10 +26,40 @@ $stock = q_all("SELECT i.name, i.unit, i.quantity, i.min_quantity,
 $activity = q_all('SELECT l.*, u.name FROM activity_log l LEFT JOIN users u ON u.id = l.user_id
     WHERE DATE(l.created_at) BETWEEN ? AND ? ORDER BY l.id DESC LIMIT 60', $range);
 $totalAppts = array_sum($apptStatus);
+$subtitle = 'Records and activity for ' . fmt_date($from) . ' – ' . fmt_date($to);
 
+if (input('format') === 'pdf') {
+    require __DIR__ . '/includes/pdf.php';
+    $due = '#e0785f';
+    $pdf = new PdfReport('Clinic report', $subtitle, config('clinic.name'),
+        'Generated ' . date('M j, Y g:i A') . ' by ' . current_user()['name']);
+    $pdf->stats([
+        ['Appointments', (string) $totalAppts, (int) ($apptStatus['completed'] ?? 0) . ' completed · ' . (int) ($apptStatus['no_show'] ?? 0) . ' no-show'],
+        ['New patients', (string) $newPatients, 'Charts created in range'],
+        ['Charged', money($charged), 'Treatments billed'],
+        ['Collected', money($collected), $charged > 0 ? round($collected / $charged * 100) . '% of charges' : 'Payments received'],
+    ]);
+    $pdf->table('Top procedures', [['Procedure', 6, 'L'], ['Count', 2, 'R'], ['Billed', 2, 'R']],
+        array_map(fn ($p) => [$p['procedure_name'], (int) $p['n'], money($p['total'])], $procedures), 'No treatments in this range.');
+    $pdf->table('Payments by method', [['Method', 6, 'L'], ['Payments', 2, 'R'], ['Total', 2, 'R']],
+        array_map(fn ($m) => [PAYMENT_METHODS[$m['method']], (int) $m['n'], money($m['total'])], $byMethod), 'No payments in this range.');
+    $pdf->table('Outstanding balances (all time)', [['Patient', 4, 'L'], ['Phone', 3, 'L'], ['Charged', 2, 'R'], ['Paid', 2, 'R'], ['Balance', 2, 'R']],
+        array_map(fn ($o) => [$o['full_name'], $o['phone'] ?: '—', money($o['charged']), money($o['paid']), [money($o['balance']), $due]], $outstanding), 'No outstanding balances.');
+    $pdf->table('Inventory usage', [['Item', 5, 'L'], ['Received', 2, 'R'], ['Used', 2, 'R'], ['On hand', 2, 'R'], ['Minimum', 2, 'R']],
+        array_map(fn ($s) => [$s['name'], (int) $s['qty_in'], (int) $s['qty_out'],
+            $s['quantity'] <= $s['min_quantity'] ? [(int) $s['quantity'] . ' ' . $s['unit'], $due] : (int) $s['quantity'] . ' ' . $s['unit'],
+            (int) $s['min_quantity']], $stock), 'No inventory items.');
+    $pdf->table('Activity log', [['When', 2.4, 'L'], ['User', 2.4, 'L'], ['Action', 2.6, 'L'], ['Details', 5, 'L']],
+        array_map(fn ($a) => [fmt_date($a['created_at'], 'M j, g:i A'), $a['name'] ?? '—', ucfirst(str_replace('_', ' ', $a['action'])), $a['details'] ?? ''], $activity),
+        'No activity in this range.');
+    $pdf->download($from === $to ? "welldent-report-$from.pdf" : "welldent-report-$from-to-$to.pdf");
+}
+
+$query = http_build_query(['from' => $from, 'to' => $to, 'format' => 'pdf']);
 layout_start('Reports', 'reports', [
-    'subtitle' => 'Records and activity for ' . fmt_date($from) . ' – ' . fmt_date($to),
-    'action'   => '<button class="btn" onclick="window.print()">Print</button>',
+    'subtitle' => $subtitle,
+    'action'   => '<a class="btn" href="reports.php?' . e($query) . '">Download PDF</a>'
+        . '<button class="btn" onclick="window.print()">Print</button>',
 ]);
 ?>
 <form method="get" class="toolbar no-print">
