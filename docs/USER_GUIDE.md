@@ -11,7 +11,7 @@ What you can do depends on your role. Your role shows under your name in the top
 | Role | What it can do |
 | --- | --- |
 | Staff | Patients, appointments, billing and payments, inventory, reminders, reports |
-| Dentist | Everything Staff can, plus edit dental charts, archive patients and post clinic notices |
+| Dentist | Everything Staff can, plus edit dental charts and procedure fees, archive patients and post clinic notices |
 | Administrator | Everything, plus the Settings page: user accounts, phone access address and database backups |
 
 ## Getting started
@@ -45,7 +45,7 @@ Every page has the same frame: a menu on the left, the page title and main butto
 | Inventory | Track supplies, record stock in and out |
 | Reminders | Check, send or cancel SMS and email reminders |
 | Reports | View and print clinic summaries |
-| Settings | Manage users, phone access and backups (Administrators) |
+| Settings | Manage users, phone access and backups (Administrators); procedure fees (Dentists and Administrators) |
 
 ### The Dashboard
 
@@ -106,11 +106,11 @@ The app blocks times in the past, outside clinic hours and overlaps with another
 
 A patient's record has three tabs: **Dental Chart**, **Treatments & Billing** and **Patient Info**. Click **Edit** to change their details.
 
-**Dental Chart:** 32 teeth in Universal Numbering, coloured by condition. Click any tooth to see its history. Dentists and Administrators can also record a new entry: choose the **Condition** (Healthy, Cavity, Filled, Crown, Extracted, Root Canal, Braces, Missing, Prosthetic), the **Procedure** and **Notes**, add an optional **Charge** to bill it, and click **Save tooth entry**. Staff can view the chart but not change it.
+**Dental Chart:** 32 teeth in Universal Numbering, coloured by condition. Click any tooth to see its history. Dentists and Administrators can also record a new entry: choose the **Condition** (Healthy, Cavity, Filled, Crown, Extracted, Root Canal, Braces, Missing, Prosthetic), the **Procedure** and **Notes**, add an optional **Charge** to bill it (picking a procedure from the price list fills in its fee), and click **Save tooth entry**. Staff can view the chart but not change it.
 
 **Treatments & Billing:** shows total charged, paid and balance.
 
-1. Click **+ Add treatment**, enter the procedure, date, amount in ₱, optional tooth number and dentist, then click **Save treatment**.
+1. Click **+ Add treatment**, enter the procedure, date, amount in ₱, optional tooth number and dentist, then click **Save treatment**. Picking a procedure from the price list fills in its standard fee; change it if needed.
 2. Click **+ Log payment** to record money received (next section).
 3. Only Administrators can remove a treatment or payment with **✕**.
 
@@ -132,7 +132,7 @@ On **Appointments**, click **Post a notice**, type the message (for example a we
 
 ## Inventory, reminders, reports and settings
 
-These pages keep supplies stocked, patients reminded and the clinic's numbers in view. Settings is for Administrators only.
+These pages keep supplies stocked, patients reminded and the clinic's numbers in view. Settings is for Administrators, except the price list, which Dentists can manage too.
 
 ### Inventory
 
@@ -159,11 +159,12 @@ Reports shows clinic numbers for any date range. It opens on this month.
 3. Scroll for Top procedures, Payments by method, Outstanding balances (all time), Inventory usage and the Activity log (who did what, and when).
 4. Click **Print** for a paper copy.
 
-### Settings (Administrators)
+### Settings (Administrators; Dentists see only the price list)
 
 - **Add a user:** click **+ Add user**, enter **Full name**, **Username**, **Role** and a **Temporary password** (at least 8 characters), then click **Create user**. Give them the password privately and ask them to change it after signing in.
 - **Reset a password:** click **Reset** next to the user, enter a **New password** and share it privately.
 - **Disable or enable an account:** click **Disable** to stop someone signing in without deleting their history. You cannot disable your own account.
+- **Procedures and fees (price list, Dentists and Administrators):** click **+ Add procedure**, enter the **Procedure** name and its **Standard fee**, then click **Save procedure**. When anyone adds a treatment or charts a tooth and picks that procedure, the fee fills in by itself. They can still change the amount for a discount or special case. Click **Edit** to change a fee; this only affects new charges, never past ones. **Remove** takes a procedure off the list without touching past charges.
 - **Phone access:** shows the address staff open on their phones while on the clinic Wi-Fi.
 - **Backup:** click **Download backup (.sql)**. Do this at least weekly and keep a copy off the laptop, on a USB drive or in cloud storage.
 

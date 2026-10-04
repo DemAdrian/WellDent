@@ -1,11 +1,16 @@
 <?php
 require dirname(__DIR__) . '/includes/bootstrap.php';
 $me = require_login();
-require_perm('settings');
+// Administrators see everything here; dentists only see and edit the price list.
+$admin = can('settings');
+if (!$admin) {
+    require_perm('fees.manage');
+}
 
 if (is_post()) {
     verify_csrf();
     $action = input('action');
+    require_perm(str_starts_with($action, 'procedure_') ? 'fees.manage' : 'settings');
 
     if ($action === 'backup') {
         log_activity('backup_downloaded');
@@ -50,6 +55,38 @@ if (is_post()) {
             log_activity('user_password_reset', 'user', (int) input('id'));
             flash('success', 'Password reset and their other sessions signed out. Share it with the user privately.');
         }
+    } elseif ($action === 'procedure_save') {
+        procedure_list(); // creates the table on databases set up before the price list existed
+        $procId = (int) input('id');
+        $name = input('name');
+        $fee = input('fee');
+        $taken = q_val('SELECT id FROM procedures WHERE name = ? AND id <> ?', [$name, $procId]);
+        if ($name === '' || mb_strlen($name) > 120) {
+            flash('error', 'Enter a procedure name (up to 120 characters).');
+        } elseif (!valid_amount($fee, true)) {
+            flash('error', 'Standard fee must be from ₱0 to ' . money(MAX_AMOUNT) . ', with at most 2 decimals.');
+        } elseif ($taken) {
+            flash('error', "“{$name}” is already on the price list. Edit that one instead.");
+        } elseif ($procId) {
+            $old = q_row('SELECT name, fee FROM procedures WHERE id = ?', [$procId]);
+            q('UPDATE procedures SET name = ?, fee = ? WHERE id = ?', [$name, $fee, $procId]);
+            if ($old) {
+                log_activity('procedure_updated', 'procedure', $procId, "{$old['name']} " . money($old['fee']) . " → $name " . money($fee));
+            }
+            flash('success', "$name updated. New charges will use " . money($fee) . '; past charges are unchanged.');
+        } else {
+            q('INSERT INTO procedures (name, fee) VALUES (?, ?)', [$name, $fee]);
+            log_activity('procedure_created', 'procedure', (int) db()->lastInsertId(), "$name " . money($fee));
+            flash('success', "$name added at " . money($fee) . '.');
+        }
+    } elseif ($action === 'procedure_remove') {
+        procedure_list();
+        $proc = q_row('SELECT * FROM procedures WHERE id = ?', [(int) input('id')]);
+        if ($proc) {
+            q('DELETE FROM procedures WHERE id = ?', [$proc['id']]);
+            log_activity('procedure_removed', 'procedure', (int) $proc['id'], "{$proc['name']} " . money($proc['fee']));
+            flash('success', "{$proc['name']} removed from the price list. Past charges are unchanged.");
+        }
     }
     redirect(url('settings/'));
 }
@@ -81,11 +118,14 @@ function lan_addresses(): array
     return array_values(array_filter($ips, fn($ip) => !str_starts_with($ip, '127.')));
 }
 
-$users = q_all('SELECT * FROM users ORDER BY is_active DESC, name');
+$users = $admin ? q_all('SELECT * FROM users ORDER BY is_active DESC, name') : [];
+$procedures = procedure_list();
 
-layout_start('Settings', 'settings', ['subtitle' => 'Clinic users, phone access and backups']);
+layout_start('Settings', 'settings', ['subtitle' => $admin ? 'Clinic users, procedure fees, phone access and backups' : 'Procedures and standard fees']);
 ?>
-<div class="layout-side">
+<div class="<?= $admin ? 'layout-side' : '' ?>">
+  <div class="stack">
+  <?php if ($admin): ?>
   <section class="card">
     <div class="card-head"><h2>Clinic users</h2><button class="btn btn-sm btn-primary" data-open="#user-dialog">+ Add user</button></div>
     <div class="table-wrap"><table class="table-cards">
@@ -107,9 +147,33 @@ layout_start('Settings', 'settings', ['subtitle' => 'Clinic users, phone access 
         <?php endforeach; ?>
       </tbody>
     </table></div>
-    <p class="muted small" style="margin-top:14px"><b>Admin</b>: everything. <b>Dentist</b>: edits dental charts, archives patients, posts notices. <b>Staff</b>: patients, appointments, billing, inventory and reminders.</p>
+    <p class="muted small" style="margin-top:14px"><b>Admin</b>: everything. <b>Dentist</b>: edits dental charts and procedure fees, archives patients, posts notices. <b>Staff</b>: patients, appointments, billing, inventory and reminders.</p>
   </section>
+  <?php endif; ?>
 
+  <section class="card">
+    <div class="card-head"><h2>Procedures &amp; fees</h2><button class="btn btn-sm btn-primary" data-open="#procedure-dialog" data-fill='{"id":"","name":"","fee":"","dialog_title":"Add procedure"}'>+ Add procedure</button></div>
+    <p class="muted small" style="margin:-6px 0 14px">Picking one of these when adding a treatment or charting a tooth fills in its standard fee. Staff can still change the amount for a discount or special case.</p>
+    <div class="table-wrap"><table class="table-cards">
+      <thead><tr><th>Procedure</th><th class="num">Standard fee</th><th></th></tr></thead>
+      <tbody>
+        <?php foreach ($procedures as $p): ?>
+          <tr>
+            <td><strong><?= e($p['name']) ?></strong></td>
+            <td class="num" data-label="Standard fee"><?= money($p['fee']) ?></td>
+            <td class="num" style="white-space:nowrap">
+              <button class="link-btn" data-open="#procedure-dialog" data-fill='<?= e(json_encode(['id' => $p['id'], 'name' => $p['name'], 'fee' => $p['fee'], 'dialog_title' => 'Edit procedure'])) ?>'>Edit</button> ·
+              <form method="post" style="display:inline" data-confirm="Remove <?= e($p['name']) ?> from the price list? Past charges are not affected."><?= csrf_field() ?><input type="hidden" name="action" value="procedure_remove"><input type="hidden" name="id" value="<?= $p['id'] ?>"><button class="link-btn">Remove</button></form>
+            </td>
+          </tr>
+        <?php endforeach; ?>
+        <?php if (!$procedures): ?><tr><td colspan="3" class="empty">No procedures yet. Add your standard fees so charges fill in automatically.</td></tr><?php endif; ?>
+      </tbody>
+    </table></div>
+  </section>
+  </div>
+
+  <?php if ($admin): ?>
   <div class="stack">
     <section class="card">
       <h2>Phone access</h2>
@@ -128,8 +192,10 @@ layout_start('Settings', 'settings', ['subtitle' => 'Clinic users, phone access 
       <form method="post"><?= csrf_field() ?><input type="hidden" name="action" value="backup"><button class="btn btn-primary" type="submit">Download backup (.sql)</button></form>
     </section>
   </div>
+  <?php endif; ?>
 </div>
 
+<?php if ($admin): ?>
 <dialog id="user-dialog">
   <form class="dialog-body" method="post">
     <div class="dialog-head"><h2>Add user</h2><button type="button" class="close" aria-label="Close">×</button></div>
@@ -143,7 +209,19 @@ layout_start('Settings', 'settings', ['subtitle' => 'Clinic users, phone access 
     <div><button class="btn btn-primary" type="submit">Create user</button></div>
   </form>
 </dialog>
+<?php endif; ?>
 
+<dialog id="procedure-dialog">
+  <form class="dialog-body" method="post">
+    <div class="dialog-head"><h2 data-text="dialog_title">Add procedure</h2><button type="button" class="close" aria-label="Close">×</button></div>
+    <?= csrf_field() ?><input type="hidden" name="action" value="procedure_save"><input type="hidden" name="id">
+    <div class="field"><label for="p-name">Procedure</label><input type="text" id="p-name" name="name" maxlength="120" required placeholder="e.g. Oral prophylaxis"></div>
+    <div class="field"><label for="p-fee">Standard fee (₱)</label><input type="number" id="p-fee" name="fee" min="0" max="<?= MAX_AMOUNT ?>" step="0.01" required><span class="hint">Changing a fee only affects new charges.</span></div>
+    <div><button class="btn btn-primary" type="submit">Save procedure</button></div>
+  </form>
+</dialog>
+
+<?php if ($admin): ?>
 <dialog id="reset-dialog">
   <form class="dialog-body" method="post">
     <div class="dialog-head"><h2>Reset password</h2><button type="button" class="close" aria-label="Close">×</button></div>
@@ -153,4 +231,5 @@ layout_start('Settings', 'settings', ['subtitle' => 'Clinic users, phone access 
     <div><button class="btn btn-primary" type="submit">Reset</button></div>
   </form>
 </dialog>
+<?php endif; ?>
 <?php layout_end();

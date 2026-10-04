@@ -242,3 +242,44 @@ function dentist_options(): array
 {
     return q_all("SELECT id, name FROM users WHERE is_active = 1 AND role IN ('dentist','admin') ORDER BY name");
 }
+
+/** Same as the table in database/schema.sql; databases set up before the price list existed get it on first use. */
+const PROCEDURES_TABLE = 'CREATE TABLE IF NOT EXISTS procedures (
+    id         INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    name       VARCHAR(120) NOT NULL UNIQUE,
+    fee        DECIMAL(10,2) NOT NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB';
+
+/** Suggestions offered while the price list is still empty. */
+const DEFAULT_PROCEDURES = ['Consultation', 'Cleaning', 'Adjustment', 'Filling', 'Extraction', 'Root canal', 'Crown fitting', 'Retainer fitting', 'Bracket repair', 'Whitening', 'X-ray'];
+
+/** The clinic's price list (Settings → Procedures & fees), sorted by name. */
+function procedure_list(): array
+{
+    static $ready = false;
+    if (!$ready) {
+        db()->exec(PROCEDURES_TABLE);
+        $ready = true;
+    }
+    return q_all('SELECT id, name, fee FROM procedures ORDER BY name');
+}
+
+/**
+ * <datalist> of procedures for a text input (list="$id"). Each option carries its standard fee, which
+ * app.js copies into the amount field named by the input's data-fee-field.
+ */
+function procedure_datalist(string $id = 'procedure-list'): string
+{
+    $procedures = procedure_list();
+    $html = '<datalist id="' . e($id) . '">';
+    foreach ($procedures as $p) {
+        $html .= '<option value="' . e($p['name']) . '" label="' . e(money($p['fee'])) . '" data-fee="' . e($p['fee']) . '">';
+    }
+    if (!$procedures) {
+        foreach (DEFAULT_PROCEDURES as $name) {
+            $html .= '<option value="' . e($name) . '">';
+        }
+    }
+    return $html . '</datalist>';
+}

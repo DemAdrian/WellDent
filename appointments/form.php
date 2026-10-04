@@ -142,7 +142,7 @@ layout_start($appt ? 'Reschedule appointment' : 'New appointment', 'appointments
       </div>
       <div class="field"><label for="procedure_name">Procedure *</label>
         <input type="text" id="procedure_name" name="procedure_name" value="<?= e($values['procedure_name']) ?>" list="procedures" maxlength="120" required>
-        <datalist id="procedures"><?php foreach (['Consultation', 'Cleaning', 'Adjustment', 'Filling', 'Extraction', 'Root canal', 'Crown fitting', 'Retainer fitting', 'Bracket repair', 'Whitening', 'X-ray'] as $proc): ?><option value="<?= $proc ?>"><?php endforeach; ?></datalist>
+        <?= procedure_datalist('procedures') ?>
       </div>
       <div class="field"><label for="dentist_id">Dentist</label>
         <select id="dentist_id" name="dentist_id"><option value="">—</option>

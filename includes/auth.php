@@ -2,7 +2,7 @@
 
 const ROLE_PERMISSIONS = [
     'admin'   => ['*'],
-    'dentist' => ['chart.edit', 'patients.archive', 'notices.manage'],
+    'dentist' => ['chart.edit', 'patients.archive', 'notices.manage', 'fees.manage'],
     'staff'   => [],
 ];
 

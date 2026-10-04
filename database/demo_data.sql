@@ -58,6 +58,11 @@ INSERT INTO treatments (patient_id, tooth_no, procedure_name, amount, performed_
  (7, NULL, 'Oral prophylaxis', 1200, CURDATE() - INTERVAL 1 DAY, 2),
  (8, NULL, 'Bracket repair', 800, CURDATE() - INTERVAL 1 DAY, 2);
 
+INSERT INTO procedures (name, fee) VALUES
+ ('Consultation', 500), ('Oral prophylaxis', 1200), ('Tooth extraction', 1500), ('Composite filling', 1500),
+ ('Root Canal Therapy', 6500), ('Dental Crown', 8000), ('Retainer', 4200), ('Bracket repair', 800),
+ ('Braces adjustment', 1000), ('Periapical X-ray', 400);
+
 INSERT INTO payments (patient_id, amount, method, reference, paid_on, received_by) VALUES
  (6, 8000, 'cash', NULL, CURDATE() - INTERVAL 240 DAY, 2),
  (6, 3500, 'gcash', 'GC-88231', CURDATE() - INTERVAL 30 DAY, 2),

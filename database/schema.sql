@@ -120,6 +120,15 @@ CREATE TABLE IF NOT EXISTS payments (
     FOREIGN KEY (received_by) REFERENCES users(id) ON DELETE SET NULL
 ) ENGINE=InnoDB;
 
+-- Price list (Settings → Procedures & fees). Picking one prefills the charge; the amount stays editable.
+-- Keep in sync with PROCEDURES_TABLE in includes/helpers.php, which creates it on older databases.
+CREATE TABLE IF NOT EXISTS procedures (
+    id         INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    name       VARCHAR(120) NOT NULL UNIQUE,
+    fee        DECIMAL(10,2) NOT NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB;
+
 CREATE TABLE IF NOT EXISTS inventory_items (
     id           INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     name         VARCHAR(120) NOT NULL,

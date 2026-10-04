@@ -224,9 +224,9 @@ layout_start($patient['full_name'], 'patients', ['subtitle' => $patient['care_ty
         <?= csrf_field() ?><input type="hidden" name="action" value="tooth"><input type="hidden" name="tooth_no">
         <div class="field"><label for="t-status">Condition</label>
           <select id="t-status" name="status"><?php foreach (TOOTH_STATUSES as $k => [$label]): ?><option value="<?= $k ?>"><?= e($label) ?></option><?php endforeach; ?></select></div>
-        <div class="field"><label for="t-proc">Procedure</label><input type="text" id="t-proc" name="procedure_name" maxlength="120" placeholder="e.g. Composite filling"></div>
+        <div class="field"><label for="t-proc">Procedure</label><input type="text" id="t-proc" name="procedure_name" maxlength="120" placeholder="e.g. Composite filling" list="procedure-list" data-fee-field="amount" autocomplete="off"><?= procedure_datalist() ?></div>
         <div class="field"><label for="t-notes">Notes</label><input type="text" id="t-notes" name="notes" maxlength="255" placeholder="e.g. Composite resin, A2 shade"></div>
-        <div class="field"><label for="t-amt">Charge (optional)</label><input type="number" id="t-amt" name="amount" min="0" max="<?= MAX_AMOUNT ?>" step="0.01" placeholder="0.00"><span class="hint">Adds a treatment to this patient's bill.</span></div>
+        <div class="field"><label for="t-amt">Charge (optional)</label><input type="number" id="t-amt" name="amount" min="0" max="<?= MAX_AMOUNT ?>" step="0.01" placeholder="0.00"><span class="hint">Adds a treatment to this patient's bill.</span><span class="hint" data-fee-hint hidden></span></div>
         <div><button class="btn btn-primary" type="submit">Save tooth entry</button></div>
       <?php else: ?>
         <input type="hidden" name="tooth_no"><input type="hidden" name="status"><input type="hidden" name="procedure_name"><input type="hidden" name="notes">
@@ -286,11 +286,12 @@ layout_start($patient['full_name'], 'patients', ['subtitle' => $patient['care_ty
     <form class="dialog-body" method="post">
       <div class="dialog-head"><h2>Add treatment</h2><button type="button" class="close" aria-label="Close">×</button></div>
       <?= csrf_field() ?><input type="hidden" name="action" value="treatment">
-      <div class="field"><label for="tr-proc">Procedure</label><input type="text" id="tr-proc" name="procedure_name" maxlength="120" required placeholder="e.g. Oral prophylaxis"></div>
+      <div class="field"><label for="tr-proc">Procedure</label><input type="text" id="tr-proc" name="procedure_name" maxlength="120" required placeholder="e.g. Oral prophylaxis" list="procedure-list" data-fee-field="amount" autocomplete="off"><?= procedure_datalist() ?></div>
       <div class="row">
         <div class="field spacer"><label for="tr-tooth">Tooth # (optional)</label><input type="number" id="tr-tooth" name="tooth_no" min="1" max="32"></div>
         <div class="field spacer"><label for="tr-amt">Amount (₱)</label><input type="number" id="tr-amt" name="amount" min="0" max="<?= MAX_AMOUNT ?>" step="0.01" required></div>
       </div>
+      <p class="hint" data-fee-hint hidden></p>
       <div class="row">
         <div class="field spacer"><label for="tr-date">Date</label><input type="date" id="tr-date" name="performed_on" value="<?= date('Y-m-d') ?>" required></div>
         <div class="field spacer"><label for="tr-dent">Dentist</label>

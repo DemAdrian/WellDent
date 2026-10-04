@@ -74,7 +74,7 @@ function layout_start(string $title, string $active, array $opts = []): void
         'reminders'    => [url('reminders/'), 'Reminders'],
         'reports'      => [url('reports/'), 'Reports'],
     ];
-    if (can('settings')) {
+    if (can('settings') || can('fees.manage')) {
         $nav['settings'] = [url('settings/'), 'Settings'];
     }
     [$chairState, $chairNote] = chair_status();
@@ -141,7 +141,7 @@ function layout_end(): void
     ?>
   </main>
 </div>
-<script src="<?= url('assets/js/app.js?v=4') ?>"></script>
+<script src="<?= url('assets/js/app.js?v=5') ?>"></script>
 </body>
 </html>
 <?php

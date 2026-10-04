@@ -36,6 +36,40 @@
     if (msg && !window.confirm(msg)) e.preventDefault();
   });
 
+  // Picking a procedure from the price list fills in its standard fee. The amount stays editable:
+  // it is only replaced while empty or still holding the fee filled in last time.
+  function applyFee(proc) {
+    var form = proc.form;
+    var amount = form && form.elements[proc.getAttribute('data-fee-field')];
+    if (!amount) return;
+    var name = proc.value.trim().toLowerCase();
+    var match = null;
+    Array.prototype.some.call(proc.list ? proc.list.options : [], function (o) {
+      if (o.hasAttribute('data-fee') && o.value.toLowerCase() === name) { match = o; return true; }
+      return false;
+    });
+    var hint = form.querySelector('[data-fee-hint]');
+    if (hint) {
+      hint.hidden = !match;
+      hint.textContent = match ? 'Standard fee for ' + match.value + ': ' + match.label + '. You can change the amount.' : '';
+    }
+    if (match && (amount.value === '' || amount.value === amount.dataset.prefilled)) {
+      amount.value = match.getAttribute('data-fee');
+      amount.dataset.prefilled = amount.value;
+    }
+  }
+  function resetFee(form) {
+    form.querySelectorAll('[data-fee-field]').forEach(function (proc) {
+      var amount = form.elements[proc.getAttribute('data-fee-field')];
+      if (amount) { amount.value = ''; delete amount.dataset.prefilled; }
+    });
+    var hint = form.querySelector('[data-fee-hint]');
+    if (hint) hint.hidden = true;
+  }
+  document.addEventListener('input', function (e) {
+    if (e.target.matches('[data-fee-field]')) applyFee(e.target);
+  });
+
   // Auto-submit selects such as the inline appointment status picker.
   document.addEventListener('change', function (e) {
     if (e.target.matches('[data-autosubmit]')) e.target.form.submit();
@@ -134,6 +168,7 @@
       dlg.querySelector('[name="status"]').value = g.getAttribute('data-status');
       dlg.querySelector('[name="procedure_name"]').value = '';
       dlg.querySelector('[name="notes"]').value = '';
+      resetFee(dlg.querySelector('form')); // otherwise the last tooth's charge carries over
       var list = dlg.querySelector('.history');
       list.innerHTML = '';
       if (!logs.length) {
