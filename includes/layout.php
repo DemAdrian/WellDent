@@ -30,7 +30,7 @@ function theme_head(): string
         . "var d=p==='dark'||(p!=='light'&&window.matchMedia('(prefers-color-scheme: dark)').matches);"
         . "document.documentElement.setAttribute('data-theme',d?'dark':'light');"
         . "try{if(localStorage.getItem('welldent-sidebar')==='collapsed')document.documentElement.setAttribute('data-sidebar','collapsed')}catch(e){}})()</script>\n"
-        . '<link rel="stylesheet" href="' . url('assets/css/app.css?v=6') . '">';
+        . '<link rel="stylesheet" href="' . url('assets/css/app.css?v=8') . '">';
 }
 
 /** Current chair state for the sidebar card. */

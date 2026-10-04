@@ -193,7 +193,8 @@ p { margin: 0; }
 .avatar-lg { width: 64px; height: 64px; font-size: 20px; }
 
 /* ---------- building blocks ---------- */
-.card { background: var(--panel); border-radius: var(--radius); box-shadow: var(--shadow); padding: 24px; }
+.card { background: var(--panel); border-radius: var(--radius); box-shadow: var(--shadow); padding: 24px; min-width: 0; overflow-wrap: break-word; }
+code { overflow-wrap: anywhere; }
 .card > h2 { margin-bottom: 18px; }
 .card-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 18px; flex-wrap: wrap; }
 .stack { display: flex; flex-direction: column; gap: 20px; }
@@ -437,7 +438,8 @@ dialog[open]::backdrop { animation: fade-in .22s ease; }
   .grid-4 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 @media (max-width: 860px) {
-  .shell { grid-template-columns: minmax(0, 1fr); }
+  /* Rows: header bar, then content. Without this, short pages stretch the header bar to fill the screen. */
+  .shell { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto 1fr; }
   .sidebar { min-width: 0; }
   .sidebar { position: sticky; top: 0; z-index: 10; height: auto; padding: 12px 16px; gap: 10px; }
   .brand-mark { width: 36px; height: 36px; font-size: 18px; }
@@ -458,7 +460,8 @@ dialog[open]::backdrop { animation: fade-in .22s ease; }
   .form-grid, .info-grid, .layout-half, .conditions { grid-template-columns: minmax(0, 1fr); }
   .form-grid .span-2 { grid-column: auto; }
   .mini-stats { grid-template-columns: repeat(2, 1fr); }
-  .sched-row { grid-template-columns: 70px 1fr; }
+  .sched-row { grid-template-columns: 70px minmax(0, 1fr); }
+  .sched-row .who-line { padding-left: 12px; }
   .sched-row .pill { grid-column: 2; justify-self: start; }
   .slot, .day-table .day-head { grid-template-columns: 70px 1fr; }
   .card { padding: 18px; }
@@ -466,9 +469,32 @@ dialog[open]::backdrop { animation: fade-in .22s ease; }
   .chart-box { overflow-x: auto; }
   .chart-box svg { min-width: 680px; } /* keep teeth big enough to tap; scroll sideways */
 }
+/* Phone: rows of a .table-cards table become stacked cards. Each cell shows its data-label on the
+   left and its value on the right; cells without a label (the name, the action links) sit on the left.
+   Screen only, so printouts keep the normal table. */
+@media screen and (max-width: 860px) {
+  .table-cards thead { display: none; }
+  .table-cards, .table-cards tbody, .table-cards tr { display: block; }
+  .table-cards tr { padding: 14px 0; border-bottom: 1px solid var(--line); }
+  .table-cards tr:first-child { padding-top: 0; }
+  .table-cards tr:last-child { border-bottom: 0; padding-bottom: 0; }
+  .table-cards td { display: flow-root; padding: 4px 0; border: 0; text-align: right; white-space: normal !important; max-width: none !important; }
+  .table-cards td[data-label]::before { content: attr(data-label); float: left; margin-right: 16px; padding-top: 2px; font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+  .table-cards td:not([data-label]) { text-align: left; }
+  .table-cards td:first-child:not([data-label]) { padding-bottom: 8px; }
+  .table-cards td:last-child:not([data-label]) { padding-top: 8px; }
+  .table-cards td:empty { display: none; }
+  .table-cards td.empty { text-align: center; padding: 20px 0; }
+}
 @media (max-width: 480px) {
-  .grid-4 { grid-template-columns: 1fr 1fr; gap: 12px; }
-  .stat .value { font-size: 28px; }
+  /* minmax(0, …) keeps both columns equal even when one holds a long amount like ₱128,450.50. */
+  .grid-4 { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+  .grid-4 .card { padding: 16px 14px; }
+  .stat .label { padding-right: 16px; }
+  .stat .dot { top: 20px; right: 14px; }
+  .stat .value { font-size: clamp(20px, 6.4vw, 28px); margin: 12px 0 10px; }
+  .bars, .bar-labels { gap: 5px; }
+  .bar-labels { font-size: 11px; }
 }
 
 @media print {

@@ -238,16 +238,16 @@ layout_start($patient['full_name'], 'patients', ['subtitle' => $patient['care_ty
   <div class="stack">
     <section class="card">
       <div class="card-head"><h2>Treatments</h2><button class="btn btn-sm btn-primary no-print" data-open="#treatment-dialog">+ Add treatment</button></div>
-      <div class="table-wrap"><table>
+      <div class="table-wrap"><table class="table-cards">
         <thead><tr><th>Date</th><th>Procedure</th><th>Tooth</th><th>Dentist</th><th class="num">Amount</th><?php if (can('billing.delete')): ?><th></th><?php endif; ?></tr></thead>
         <tbody>
           <?php foreach ($treatments as $t): ?>
             <tr>
               <td><?= e(fmt_date($t['performed_on'])) ?></td>
-              <td><?= e($t['procedure_name']) ?><?= $t['notes'] ? '<br><small class="muted">' . e($t['notes']) . '</small>' : '' ?></td>
-              <td><?= $t['tooth_no'] ? '#' . (int) $t['tooth_no'] : '—' ?></td>
-              <td><?= e($t['dentist'] ?? '—') ?></td>
-              <td class="num"><?= money($t['amount']) ?></td>
+              <td data-label="Procedure"><?= e($t['procedure_name']) ?><?= $t['notes'] ? '<br><small class="muted">' . e($t['notes']) . '</small>' : '' ?></td>
+              <td data-label="Tooth"><?= $t['tooth_no'] ? '#' . (int) $t['tooth_no'] : '—' ?></td>
+              <td data-label="Dentist"><?= e($t['dentist'] ?? '—') ?></td>
+              <td class="num" data-label="Amount"><?= money($t['amount']) ?></td>
               <?php if (can('billing.delete')): ?><td class="num"><form method="post" data-confirm="Remove this treatment charge?"><?= csrf_field() ?><input type="hidden" name="action" value="delete_treatment"><input type="hidden" name="row_id" value="<?= $t['id'] ?>"><button class="link-btn" aria-label="Remove">✕</button></form></td><?php endif; ?>
             </tr>
           <?php endforeach; ?>
@@ -258,16 +258,16 @@ layout_start($patient['full_name'], 'patients', ['subtitle' => $patient['care_ty
 
     <section class="card">
       <div class="card-head"><h2>Payments</h2><a class="btn btn-sm btn-primary no-print" href="<?= url('patients/payment.php') ?>?patient_id=<?= $id ?>">+ Log payment</a></div>
-      <div class="table-wrap"><table>
+      <div class="table-wrap"><table class="table-cards">
         <thead><tr><th>Date</th><th>Method</th><th>Reference</th><th>Received by</th><th class="num">Amount</th><?php if (can('billing.delete')): ?><th></th><?php endif; ?></tr></thead>
         <tbody>
           <?php foreach ($payments as $y): ?>
             <tr>
               <td><?= e(fmt_date($y['paid_on'])) ?></td>
-              <td><?= e(PAYMENT_METHODS[$y['method']]) ?></td>
-              <td><?= e($y['reference'] ?: '—') ?><?= $y['notes'] ? '<br><small class="muted">' . e($y['notes']) . '</small>' : '' ?></td>
-              <td><?= e($y['received'] ?? '—') ?></td>
-              <td class="num amount-paid"><?= money($y['amount']) ?></td>
+              <td data-label="Method"><?= e(PAYMENT_METHODS[$y['method']]) ?></td>
+              <td data-label="Reference"><?= e($y['reference'] ?: '—') ?><?= $y['notes'] ? '<br><small class="muted">' . e($y['notes']) . '</small>' : '' ?></td>
+              <td data-label="Received by"><?= e($y['received'] ?? '—') ?></td>
+              <td class="num amount-paid" data-label="Amount"><?= money($y['amount']) ?></td>
               <?php if (can('billing.delete')): ?><td class="num"><form method="post" data-confirm="Remove this payment?"><?= csrf_field() ?><input type="hidden" name="action" value="delete_payment"><input type="hidden" name="row_id" value="<?= $y['id'] ?>"><button class="link-btn" aria-label="Remove">✕</button></form></td><?php endif; ?>
             </tr>
           <?php endforeach; ?>
@@ -322,15 +322,15 @@ layout_start($patient['full_name'], 'patients', ['subtitle' => $patient['care_ty
 
     <section class="card">
       <div class="card-head"><h2>Appointment history</h2><a class="btn btn-sm btn-primary no-print" href="<?= url('appointments/form.php') ?>?patient_id=<?= $id ?>">+ Book</a></div>
-      <div class="table-wrap"><table>
+      <div class="table-wrap"><table class="table-cards">
         <thead><tr><th>Date</th><th>Procedure</th><th>Dentist</th><th>Status</th><th></th></tr></thead>
         <tbody>
           <?php foreach ($appointments as $a): ?>
             <tr>
               <td><?= e(fmt_date($a['starts_at'])) ?> · <?= fmt_time($a['starts_at']) ?></td>
-              <td><?= e($a['procedure_name']) ?></td>
-              <td><?= e($a['dentist'] ?? '—') ?></td>
-              <td><?= pill($a['status']) ?></td>
+              <td data-label="Procedure"><?= e($a['procedure_name']) ?></td>
+              <td data-label="Dentist"><?= e($a['dentist'] ?? '—') ?></td>
+              <td data-label="Status"><?= pill($a['status']) ?></td>
               <td class="num"><a href="<?= url('appointments/form.php') ?>?id=<?= $a['id'] ?>">Edit</a></td>
             </tr>
           <?php endforeach; ?>

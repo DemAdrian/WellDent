@@ -88,15 +88,15 @@ layout_start('Settings', 'settings', ['subtitle' => 'Clinic users, phone access 
 <div class="layout-side">
   <section class="card">
     <div class="card-head"><h2>Clinic users</h2><button class="btn btn-sm btn-primary" data-open="#user-dialog">+ Add user</button></div>
-    <div class="table-wrap"><table>
+    <div class="table-wrap"><table class="table-cards">
       <thead><tr><th>Name</th><th>Role</th><th>Last sign-in</th><th>Status</th><th></th></tr></thead>
       <tbody>
         <?php foreach ($users as $i => $u): ?>
           <tr>
             <td><div class="who"><?= avatar($u['name'], $i) ?><span><strong><?= e($u['name']) ?></strong><small><?= e($u['username']) ?></small></span></div></td>
-            <td><?= e(ROLE_LABELS[$u['role']]) ?></td>
-            <td><?= $u['last_login_at'] ? e(fmt_date($u['last_login_at'], 'M j, g:i A')) : '<span class="muted">Never</span>' ?></td>
-            <td><?= $u['is_active'] ? pill('active') : pill('cancelled', 'Disabled') ?></td>
+            <td data-label="Role"><?= e(ROLE_LABELS[$u['role']]) ?></td>
+            <td data-label="Last sign-in"><?= $u['last_login_at'] ? e(fmt_date($u['last_login_at'], 'M j, g:i A')) : '<span class="muted">Never</span>' ?></td>
+            <td data-label="Status"><?= $u['is_active'] ? pill('active') : pill('cancelled', 'Disabled') ?></td>
             <td class="num" style="white-space:nowrap">
               <button class="link-btn" data-open="#reset-dialog" data-fill='<?= e(json_encode(['id' => $u['id'], 'reset_name' => $u['name']])) ?>'>Reset password</button>
               <?php if ((int) $u['id'] !== (int) $me['id']): ?> ·

@@ -67,16 +67,16 @@ layout_start('Reminders', 'reminders', [
 </div>
 
 <section class="card">
-  <div class="table-wrap"><table>
+  <div class="table-wrap"><table class="table-cards">
     <thead><tr><th>Send at</th><th>Patient</th><th>Channel</th><th>Message</th><th>Status</th><th></th></tr></thead>
     <tbody>
       <?php foreach ($reminders as $r): ?>
         <tr>
-          <td style="white-space:nowrap"><?= e(fmt_date($r['send_at'], 'M j, g:i A')) ?></td>
-          <td><a href="<?= url('patients/view.php') ?>?id=<?= $r['patient_id'] ?>"><?= e($r['full_name']) ?></a><br><small class="muted"><?= e($r['recipient']) ?></small></td>
-          <td><?= $r['channel'] === 'sms' ? 'SMS' : 'Email' ?></td>
-          <td class="small" style="max-width:420px"><?= e($r['message']) ?><?= $r['error'] ? '<br><span class="amount-due">' . e($r['error']) . '</span>' : '' ?></td>
-          <td><?= pill($r['status']) ?></td>
+          <td data-label="Send at" style="white-space:nowrap"><?= e(fmt_date($r['send_at'], 'M j, g:i A')) ?></td>
+          <td data-label="Patient"><a href="<?= url('patients/view.php') ?>?id=<?= $r['patient_id'] ?>"><?= e($r['full_name']) ?></a><br><small class="muted"><?= e($r['recipient']) ?></small></td>
+          <td data-label="Channel"><?= $r['channel'] === 'sms' ? 'SMS' : 'Email' ?></td>
+          <td class="small" data-label="Message" style="max-width:420px"><?= e($r['message']) ?><?= $r['error'] ? '<br><span class="amount-due">' . e($r['error']) . '</span>' : '' ?></td>
+          <td data-label="Status"><?= pill($r['status']) ?></td>
           <td class="num" style="white-space:nowrap">
             <?php if (in_array($r['status'], ['scheduled', 'failed'], true)): ?>
               <form method="post" style="display:inline"><?= csrf_field() ?><input type="hidden" name="id" value="<?= $r['id'] ?>"><button class="link-btn" name="action" value="<?= $r['status'] === 'failed' ? 'retry' : 'send_now' ?>"><?= $r['status'] === 'failed' ? 'Retry' : 'Send now' ?></button></form> ·

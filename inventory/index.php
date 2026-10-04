@@ -111,16 +111,16 @@ layout_start('Inventory', 'inventory', [
 
 <div class="layout-side">
   <section class="card">
-    <div class="table-wrap"><table>
+    <div class="table-wrap"><table class="table-cards">
       <thead><tr><th>Item</th><th>Category</th><th class="num">On hand</th><th class="num">Minimum</th><th>Status</th><th></th></tr></thead>
       <tbody>
         <?php foreach ($items as $it): $level = stock_level($it); ?>
           <tr>
             <td><strong><?= e($it['name']) ?></strong><?= $it['supplier'] ? '<br><small class="muted">' . e($it['supplier']) . '</small>' : '' ?></td>
-            <td><?= e($it['category'] ?: '—') ?></td>
-            <td class="num"><?= (int) $it['quantity'] ?> <?= e($it['unit']) ?></td>
-            <td class="num"><?= (int) $it['min_quantity'] ?></td>
-            <td><?= pill($level, ['ok' => 'In stock', 'low' => 'Low', 'critical' => 'Critical'][$level]) ?></td>
+            <td data-label="Category"><?= e($it['category'] ?: '—') ?></td>
+            <td class="num" data-label="On hand"><?= (int) $it['quantity'] ?> <?= e($it['unit']) ?></td>
+            <td class="num" data-label="Minimum"><?= (int) $it['min_quantity'] ?></td>
+            <td data-label="Status"><?= pill($level, ['ok' => 'In stock', 'low' => 'Low', 'critical' => 'Critical'][$level]) ?></td>
             <td class="num" style="white-space:nowrap">
               <button class="link-btn" data-open="#stock-dialog" data-fill='<?= e(json_encode(['item_id' => $it['id'], 'type' => 'in'])) ?>'>Stock</button> ·
               <button class="link-btn" data-open="#item-dialog" data-fill='<?= e(json_encode(array_intersect_key($it, array_flip(['id', 'name', 'category', 'unit', 'quantity', 'min_quantity', 'supplier'])) + ['dialog_title' => 'Edit item'])) ?>'>Edit</button>

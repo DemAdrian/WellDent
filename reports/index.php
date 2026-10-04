@@ -102,10 +102,10 @@ layout_start('Reports', 'reports', [
 <div class="stack">
   <section class="card">
     <h2>Outstanding balances (all time)</h2>
-    <div class="table-wrap"><table><thead><tr><th>Patient</th><th>Phone</th><th class="num">Charged</th><th class="num">Paid</th><th class="num">Balance</th></tr></thead><tbody>
+    <div class="table-wrap"><table class="table-cards"><thead><tr><th>Patient</th><th>Phone</th><th class="num">Charged</th><th class="num">Paid</th><th class="num">Balance</th></tr></thead><tbody>
       <?php foreach ($outstanding as $o): ?>
-        <tr><td><a href="<?= url('patients/view.php') ?>?id=<?= $o['id'] ?>&amp;tab=billing"><?= e($o['full_name']) ?></a></td><td><?= e($o['phone'] ?: '—') ?></td>
-          <td class="num"><?= money($o['charged']) ?></td><td class="num"><?= money($o['paid']) ?></td><td class="num amount-due"><?= money($o['balance']) ?></td></tr>
+        <tr><td><a href="<?= url('patients/view.php') ?>?id=<?= $o['id'] ?>&amp;tab=billing"><?= e($o['full_name']) ?></a></td><td data-label="Phone"><?= e($o['phone'] ?: '—') ?></td>
+          <td class="num" data-label="Charged"><?= money($o['charged']) ?></td><td class="num" data-label="Paid"><?= money($o['paid']) ?></td><td class="num amount-due" data-label="Balance"><?= money($o['balance']) ?></td></tr>
       <?php endforeach; ?>
       <?php if (!$outstanding): ?><tr><td colspan="5" class="empty">No outstanding balances.</td></tr><?php endif; ?>
     </tbody></table></div>
@@ -113,10 +113,10 @@ layout_start('Reports', 'reports', [
 
   <section class="card">
     <h2>Inventory usage</h2>
-    <div class="table-wrap"><table><thead><tr><th>Item</th><th class="num">Received</th><th class="num">Used</th><th class="num">On hand</th><th class="num">Minimum</th></tr></thead><tbody>
+    <div class="table-wrap"><table class="table-cards"><thead><tr><th>Item</th><th class="num">Received</th><th class="num">Used</th><th class="num">On hand</th><th class="num">Minimum</th></tr></thead><tbody>
       <?php foreach ($stock as $s): ?>
-        <tr><td><?= e($s['name']) ?></td><td class="num"><?= (int) $s['qty_in'] ?></td><td class="num"><?= (int) $s['qty_out'] ?></td>
-          <td class="num<?= $s['quantity'] <= $s['min_quantity'] ? ' amount-due' : '' ?>"><?= (int) $s['quantity'] ?> <?= e($s['unit']) ?></td><td class="num"><?= (int) $s['min_quantity'] ?></td></tr>
+        <tr><td><?= e($s['name']) ?></td><td class="num" data-label="Received"><?= (int) $s['qty_in'] ?></td><td class="num" data-label="Used"><?= (int) $s['qty_out'] ?></td>
+          <td class="num<?= $s['quantity'] <= $s['min_quantity'] ? ' amount-due' : '' ?>" data-label="On hand"><?= (int) $s['quantity'] ?> <?= e($s['unit']) ?></td><td class="num" data-label="Minimum"><?= (int) $s['min_quantity'] ?></td></tr>
       <?php endforeach; ?>
       <?php if (!$stock): ?><tr><td colspan="5" class="empty">No inventory items.</td></tr><?php endif; ?>
     </tbody></table></div>
@@ -124,11 +124,11 @@ layout_start('Reports', 'reports', [
 
   <section class="card">
     <h2>Activity log</h2>
-    <div class="table-wrap"><table><thead><tr><th>When</th><th>User</th><th>Action</th><th>Details</th></tr></thead><tbody>
+    <div class="table-wrap"><table class="table-cards"><thead><tr><th>When</th><th>User</th><th>Action</th><th>Details</th></tr></thead><tbody>
       <?php foreach ($activity as $a): ?>
-        <tr><td style="white-space:nowrap"><?= e(fmt_date($a['created_at'], 'M j, g:i A')) ?></td><td><?= e($a['name'] ?? '—') ?></td>
-          <td><?= e(ucfirst(str_replace('_', ' ', $a['action']))) ?></td>
-          <td><?= $a['entity'] === 'patient' && $a['entity_id'] ? '<a href="' . url('patients/view.php') . '?id=' . (int) $a['entity_id'] . '">' . e($a['details'] ?: 'Patient') . '</a>' : e($a['details'] ?? '') ?></td></tr>
+        <tr><td style="white-space:nowrap"><?= e(fmt_date($a['created_at'], 'M j, g:i A')) ?></td><td data-label="User"><?= e($a['name'] ?? '—') ?></td>
+          <td data-label="Action"><?= e(ucfirst(str_replace('_', ' ', $a['action']))) ?></td>
+          <td data-label="Details"><?= $a['entity'] === 'patient' && $a['entity_id'] ? '<a href="' . url('patients/view.php') . '?id=' . (int) $a['entity_id'] . '">' . e($a['details'] ?: 'Patient') . '</a>' : e($a['details'] ?? '') ?></td></tr>
       <?php endforeach; ?>
       <?php if (!$activity): ?><tr><td colspan="4" class="empty">No activity in this range.</td></tr><?php endif; ?>
     </tbody></table></div>

@@ -76,22 +76,22 @@ layout_start('Patients', 'patients', [
 
 <section class="card">
   <div class="table-wrap">
-    <table>
+    <table class="table-cards">
       <thead><tr><th>Patient</th><th>Care type</th><th>Next appointment</th><th>Balance</th><th>Record status</th><th>Added by</th><th></th></tr></thead>
       <tbody>
         <?php foreach ($patients as $i => $p): ?>
           <tr>
             <td><div class="who"><?= avatar($p['full_name'], $i) ?><span><strong><?= e($p['full_name']) ?></strong><small><?= e($p['phone'] ?: $p['record_no']) ?></small></span></div></td>
-            <td><?= e($p['care_type']) ?></td>
-            <td><?= $p['next_appt'] ? e(fmt_date($p['next_appt'], 'M j')) . ' · ' . fmt_time($p['next_appt']) : '<span class="muted">—</span>' ?></td>
-            <td>
+            <td data-label="Care type"><?= e($p['care_type']) ?></td>
+            <td data-label="Next appointment"><?= $p['next_appt'] ? e(fmt_date($p['next_appt'], 'M j')) . ' · ' . fmt_time($p['next_appt']) : '<span class="muted">—</span>' ?></td>
+            <td data-label="Balance">
               <?php if ($p['balance'] > 0): ?><span class="amount-due"><?= money($p['balance']) ?></span>
               <?php elseif ($p['balance'] < 0): ?><span class="amount-credit"><?= money($p['balance']) ?> credit</span>
               <?php elseif ($p['charged'] > 0): ?><span class="amount-paid">Paid</span>
               <?php else: ?><span class="muted">—</span><?php endif; ?>
             </td>
-            <td><?= pill($p['status']) ?></td>
-            <td><?= $p['added_by'] ? e($p['added_by']) : '<span class="muted">—</span>' ?><br><small class="muted"><?= e(fmt_date($p['created_at'], 'M j, Y')) ?></small></td>
+            <td data-label="Record status"><?= pill($p['status']) ?></td>
+            <td data-label="Added by"><?= $p['added_by'] ? e($p['added_by']) : '<span class="muted">—</span>' ?><br><small class="muted"><?= e(fmt_date($p['created_at'], 'M j, Y')) ?></small></td>
             <td class="num"><a href="<?= url('patients/view.php') ?>?id=<?= $p['id'] ?>" style="font-weight:600">Open →</a></td>
           </tr>
         <?php endforeach; ?>
