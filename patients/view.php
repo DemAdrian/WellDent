@@ -129,6 +129,52 @@ $treatments = q_all('SELECT t.*, u.name AS dentist FROM treatments t LEFT JOIN u
 $payments = q_all('SELECT y.*, u.name AS received FROM payments y LEFT JOIN users u ON u.id = y.received_by
     WHERE y.patient_id = ? ORDER BY y.paid_on DESC, y.id DESC', [$id]);
 
+// One dated list of charges and payments, oldest first, with the balance after each line.
+// Same-day entries keep the order they were entered in.
+$ledger = [];
+foreach ($treatments as $t) {
+    $ledger[] = ['kind' => 'treatment', 'id' => (int) $t['id'], 'date' => $t['performed_on'], 'at' => $t['created_at'],
+        'charge' => (float) $t['amount'], 'paid' => 0.0,
+        'what' => $t['procedure_name'] . ($t['tooth_no'] ? ' · Tooth #' . (int) $t['tooth_no'] : ''),
+        'detail' => implode(' · ', array_filter([$t['notes'], $t['dentist']]))];
+}
+foreach ($payments as $y) {
+    $ledger[] = ['kind' => 'payment', 'id' => (int) $y['id'], 'date' => $y['paid_on'], 'at' => $y['created_at'],
+        'charge' => 0.0, 'paid' => (float) $y['amount'],
+        'what' => 'Payment · ' . PAYMENT_METHODS[$y['method']] . ($y['reference'] ? ' · Ref ' . $y['reference'] : ''),
+        'detail' => implode(' · ', array_filter([$y['notes'], $y['received'] ? 'Received by ' . $y['received'] : null]))];
+}
+usort($ledger, fn($a, $b) => [$a['date'], $a['at'], $a['kind'] === 'payment', $a['id']] <=> [$b['date'], $b['at'], $b['kind'] === 'payment', $b['id']]);
+$running = 0.0;
+foreach ($ledger as &$entry) {
+    $running = round($running + $entry['charge'] - $entry['paid'], 2);
+    $entry['balance'] = $running;
+}
+unset($entry);
+
+if (input('format') === 'pdf') {
+    require dirname(__DIR__) . '/includes/pdf.php';
+    $due = '#e0785f';
+    $credit = '#1f8a80';
+    $bal = (float) $patient['balance'];
+    $pdf = new PdfReport('Statement of account', $patient['full_name'] . ($patient['record_no'] ? ' · ' . $patient['record_no'] : '') . ' · As of ' . date('M j, Y'),
+        config('clinic.name'), 'Generated ' . date('M j, Y g:i A') . ' by ' . $user['name']);
+    $pdf->stats([
+        ['Total charged', money($patient['charged']), count($treatments) . ' treatment(s)'],
+        ['Total paid', money($patient['paid']), count($payments) . ' payment(s)'],
+        [$bal < 0 ? 'Credit' : 'Balance due', money($bal), $bal < 0 ? 'Held for future treatment' : ($bal > 0 ? 'Amount still owed' : 'Fully paid')],
+    ]);
+    $pdf->table('Charges and payments', [['Date', 2, 'L'], ['Description', 6, 'L'], ['Charge', 2, 'R'], ['Payment', 2, 'R'], ['Balance', 2.8, 'R']],
+        array_map(fn($l) => [
+            fmt_date($l['date']),
+            $l['what'] . ($l['detail'] !== '' ? ' · ' . $l['detail'] : ''),
+            $l['kind'] === 'treatment' ? money($l['charge']) : '',
+            $l['kind'] === 'payment' ? [money($l['paid']), $credit] : '',
+            [money($l['balance']) . ($l['balance'] < 0 ? ' CR' : ''), $l['balance'] > 0 ? $due : $credit],
+        ], $ledger), 'No charges or payments recorded.');
+    $pdf->download('statement-' . trim(preg_replace('/[^a-z0-9]+/', '-', strtolower($patient['full_name'])), '-') . '-' . date('Y-m-d') . '.pdf');
+}
+
 // Tooth history, newest first; the first entry per tooth is its current state.
 $toothLogs = q_all('SELECT r.*, u.name AS by_name FROM tooth_records r LEFT JOIN users u ON u.id = r.recorded_by
     WHERE r.patient_id = ? ORDER BY r.id DESC', [$id]);
@@ -235,52 +281,37 @@ layout_start($patient['full_name'], 'patients', ['subtitle' => $patient['care_ty
   </dialog>
 
 <?php elseif ($tab === 'billing'): ?>
-  <div class="stack">
-    <section class="card">
-      <div class="card-head"><h2>Treatments</h2><button class="btn btn-sm btn-primary no-print" data-open="#treatment-dialog">+ Add treatment</button></div>
-      <div class="table-wrap"><table class="table-cards">
-        <thead><tr><th>Date</th><th>Procedure</th><th>Tooth</th><th>Dentist</th><th class="num">Amount</th><?php if (can('billing.delete')): ?><th></th><?php endif; ?></tr></thead>
-        <tbody>
-          <?php foreach ($treatments as $t): ?>
-            <tr>
-              <td><?= e(fmt_date($t['performed_on'])) ?></td>
-              <td data-label="Procedure"><?= e($t['procedure_name']) ?><?= $t['notes'] ? '<br><small class="muted">' . e($t['notes']) . '</small>' : '' ?></td>
-              <td data-label="Tooth"><?= $t['tooth_no'] ? '#' . (int) $t['tooth_no'] : '—' ?></td>
-              <td data-label="Dentist"><?= e($t['dentist'] ?? '—') ?></td>
-              <td class="num" data-label="Amount"><?= money($t['amount']) ?></td>
-              <?php if (can('billing.delete')): ?><td class="num"><form method="post" data-confirm="Remove this treatment charge?"><?= csrf_field() ?><input type="hidden" name="action" value="delete_treatment"><input type="hidden" name="row_id" value="<?= $t['id'] ?>"><button class="link-btn" aria-label="Remove">✕</button></form></td><?php endif; ?>
-            </tr>
-          <?php endforeach; ?>
-          <?php if (!$treatments): ?><tr><td colspan="6" class="empty">No treatments recorded yet.</td></tr><?php endif; ?>
-        </tbody>
-      </table></div>
-    </section>
-
-    <section class="card">
-      <div class="card-head"><h2>Payments</h2><a class="btn btn-sm btn-primary no-print" href="<?= url('patients/payment.php') ?>?patient_id=<?= $id ?>">+ Log payment</a></div>
-      <div class="table-wrap"><table class="table-cards">
-        <thead><tr><th>Date</th><th>Method</th><th>Reference</th><th>Received by</th><th class="num">Amount</th><?php if (can('billing.delete')): ?><th></th><?php endif; ?></tr></thead>
-        <tbody>
-          <?php foreach ($payments as $y): ?>
-            <tr>
-              <td><?= e(fmt_date($y['paid_on'])) ?></td>
-              <td data-label="Method"><?= e(PAYMENT_METHODS[$y['method']]) ?></td>
-              <td data-label="Reference"><?= e($y['reference'] ?: '—') ?><?= $y['notes'] ? '<br><small class="muted">' . e($y['notes']) . '</small>' : '' ?></td>
-              <td data-label="Received by"><?= e($y['received'] ?? '—') ?></td>
-              <td class="num amount-paid" data-label="Amount"><?= money($y['amount']) ?></td>
-              <?php if (can('billing.delete')): ?><td class="num"><form method="post" data-confirm="Remove this payment?"><?= csrf_field() ?><input type="hidden" name="action" value="delete_payment"><input type="hidden" name="row_id" value="<?= $y['id'] ?>"><button class="link-btn" aria-label="Remove">✕</button></form></td><?php endif; ?>
-            </tr>
-          <?php endforeach; ?>
-          <?php if (!$payments): ?><tr><td colspan="6" class="empty">No payments yet.</td></tr><?php endif; ?>
-        </tbody>
-      </table></div>
-      <p class="row" style="justify-content:flex-end;margin-top:16px;gap:24px">
-        <span>Charged <b><?= money($patient['charged']) ?></b></span>
-        <span>Paid <b><?= money($patient['paid']) ?></b></span>
-        <span><?= $balance < 0 ? 'Credit' : 'Balance' ?> <b class="<?= $balance > 0 ? 'amount-due' : 'amount-credit' ?>"><?= money($balance) ?></b></span>
-      </p>
-    </section>
-  </div>
+  <section class="card">
+    <div class="card-head"><h2>Account ledger</h2>
+      <div class="row no-print">
+        <a class="btn btn-sm" href="<?= $back('billing') ?>&amp;format=pdf">Statement PDF</a>
+        <a class="btn btn-sm" href="<?= url('patients/payment.php') ?>?patient_id=<?= $id ?>">+ Log payment</a>
+        <button class="btn btn-sm btn-primary" data-open="#treatment-dialog">+ Add treatment</button>
+      </div>
+    </div>
+    <p class="muted small" style="margin:-8px 0 16px">Oldest first. The balance column shows what the patient owed after each entry.</p>
+    <div class="table-wrap"><table class="table-cards">
+      <thead><tr><th>Date</th><th>Description</th><th class="num">Charge</th><th class="num">Payment</th><th class="num">Balance</th><?php if (can('billing.delete')): ?><th></th><?php endif; ?></tr></thead>
+      <tbody>
+        <?php foreach ($ledger as $l): ?>
+          <tr>
+            <td><?= e(fmt_date($l['date'])) ?></td>
+            <td data-label="Description"><?= e($l['what']) ?><?= $l['detail'] !== '' ? '<br><small class="muted">' . e($l['detail']) . '</small>' : '' ?></td>
+            <td class="num" data-label="Charge"><?= $l['kind'] === 'treatment' ? money($l['charge']) : '' ?></td>
+            <td class="num amount-paid" data-label="Payment"><?= $l['kind'] === 'payment' ? money($l['paid']) : '' ?></td>
+            <td class="num" data-label="Balance"><b class="<?= $l['balance'] > 0 ? 'amount-due' : 'amount-credit' ?>"><?= money($l['balance']) ?><?= $l['balance'] < 0 ? ' credit' : '' ?></b></td>
+            <?php if (can('billing.delete')): ?><td class="num"><form method="post" data-confirm="<?= $l['kind'] === 'treatment' ? 'Remove this treatment charge?' : 'Remove this payment?' ?>"><?= csrf_field() ?><input type="hidden" name="action" value="delete_<?= $l['kind'] ?>"><input type="hidden" name="row_id" value="<?= $l['id'] ?>"><button class="link-btn" aria-label="Remove">✕</button></form></td><?php endif; ?>
+          </tr>
+        <?php endforeach; ?>
+        <?php if (!$ledger): ?><tr><td colspan="6" class="empty">No charges or payments recorded yet.</td></tr><?php endif; ?>
+      </tbody>
+    </table></div>
+    <p class="row" style="justify-content:flex-end;margin-top:16px;gap:24px">
+      <span>Charged <b><?= money($patient['charged']) ?></b></span>
+      <span>Paid <b><?= money($patient['paid']) ?></b></span>
+      <span><?= $balance < 0 ? 'Credit' : 'Balance' ?> <b class="<?= $balance > 0 ? 'amount-due' : 'amount-credit' ?>"><?= money($balance) ?></b></span>
+    </p>
+  </section>
 
   <dialog id="treatment-dialog">
     <form class="dialog-body" method="post">

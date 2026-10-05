@@ -108,11 +108,12 @@ A patient's record has three tabs: **Dental Chart**, **Treatments & Billing** an
 
 **Dental Chart:** 32 teeth in Universal Numbering, coloured by condition. Click any tooth to see its history. Dentists and Administrators can also record a new entry: choose the **Condition** (Healthy, Cavity, Filled, Crown, Extracted, Root Canal, Braces, Missing, Prosthetic), the **Procedure** and **Notes**, add an optional **Charge** to bill it (picking a procedure from the price list fills in its fee), and click **Save tooth entry**. Staff can view the chart but not change it.
 
-**Treatments & Billing:** shows total charged, paid and balance.
+**Treatments & Billing:** the **Account ledger** lists every charge and payment in date order, oldest first. The **Balance** column shows what the patient owed after each entry, so you can see when a balance built up or was paid off. A balance marked *credit* means the clinic is holding money for future treatment. Totals for charged, paid and balance are under the list.
 
 1. Click **+ Add treatment**, enter the procedure, date, amount in ₱, optional tooth number and dentist, then click **Save treatment**. Picking a procedure from the price list fills in its standard fee; change it if needed.
 2. Click **+ Log payment** to record money received (next section).
-3. Only Administrators can remove a treatment or payment with **✕**.
+3. Click **Statement PDF** to download a statement of account for the patient: their totals and the full ledger, ready to print or send.
+4. Only Administrators can remove a treatment or payment with **✕**.
 
 ### Record a payment
 
