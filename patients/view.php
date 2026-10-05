@@ -63,12 +63,28 @@ if (is_post()) {
         redirect($back('billing'));
     }
 
-    if ($action === 'delete_treatment' || $action === 'delete_payment') {
+    // Billing entries are never deleted. Voiding keeps the row (shown struck through in the ledger),
+    // drops it from every total, and logs what it was so the change can be traced later.
+    if ($action === 'void_treatment' || $action === 'void_payment') {
         require_perm('billing.delete');
-        $table = $action === 'delete_treatment' ? 'treatments' : 'payments';
-        q("DELETE FROM $table WHERE id = ? AND patient_id = ?", [(int) input('row_id'), $id]);
-        log_activity($action, 'patient', $id, 'row ' . input('row_id'));
-        flash('success', 'Entry removed.');
+        $isTreatment = $action === 'void_treatment';
+        $table = $isTreatment ? 'treatments' : 'payments';
+        $reason = trim((string) input('void_reason'));
+        $row = q_row("SELECT * FROM $table WHERE id = ? AND patient_id = ? AND voided_at IS NULL", [(int) input('row_id'), $id]);
+        if (!$row) {
+            flash('error', 'That entry was not found or is already voided.');
+        } elseif ($reason === '') {
+            flash('error', 'Enter a reason for voiding the entry.');
+        } elseif ($tooLong = length_errors(['void_reason' => $reason], ['void_reason' => ['Reason', 255]])) {
+            flash('error', implode(' ', $tooLong));
+        } else {
+            q("UPDATE $table SET voided_at = NOW(), voided_by = ?, void_reason = ? WHERE id = ?", [$user['id'], $reason, $row['id']]);
+            $what = $isTreatment
+                ? $row['procedure_name'] . ($row['tooth_no'] ? ' #' . (int) $row['tooth_no'] : '') . ' ' . money($row['amount']) . ' on ' . fmt_date($row['performed_on'])
+                : PAYMENT_METHODS[$row['method']] . ' payment ' . money($row['amount']) . ' on ' . fmt_date($row['paid_on']) . ($row['reference'] ? ' ref ' . $row['reference'] : '');
+            log_activity($action, 'patient', $id, "$what. Reason: $reason");
+            flash('success', ($isTreatment ? 'Charge' : 'Payment') . ' voided. It stays in the ledger but no longer counts toward the balance.');
+        }
         redirect($back('billing'));
     }
 
@@ -124,33 +140,42 @@ if (is_post()) {
 
 $appointments = q_all('SELECT a.*, u.name AS dentist FROM appointments a LEFT JOIN users u ON u.id = a.dentist_id
     WHERE a.patient_id = ? ORDER BY a.starts_at DESC', [$id]);
-$treatments = q_all('SELECT t.*, u.name AS dentist FROM treatments t LEFT JOIN users u ON u.id = t.dentist_id
+$treatments = q_all('SELECT t.*, u.name AS dentist, v.name AS voided_by_name FROM treatments t LEFT JOIN users u ON u.id = t.dentist_id LEFT JOIN users v ON v.id = t.voided_by
     WHERE t.patient_id = ? ORDER BY t.performed_on DESC, t.id DESC', [$id]);
-$payments = q_all('SELECT y.*, u.name AS received FROM payments y LEFT JOIN users u ON u.id = y.received_by
+$payments = q_all('SELECT y.*, u.name AS received, v.name AS voided_by_name FROM payments y LEFT JOIN users u ON u.id = y.received_by LEFT JOIN users v ON v.id = y.voided_by
     WHERE y.patient_id = ? ORDER BY y.paid_on DESC, y.id DESC', [$id]);
 
 // One dated list of charges and payments, oldest first, with the balance after each line.
-// Same-day entries keep the order they were entered in.
+// Same-day entries keep the order they were entered in. Voided entries stay listed but don't count.
+$voidInfo = fn(array $r) => $r['voided_at']
+    ? 'Voided ' . fmt_date($r['voided_at']) . ($r['voided_by_name'] ? ' by ' . $r['voided_by_name'] : '') . ': ' . $r['void_reason']
+    : null;
 $ledger = [];
 foreach ($treatments as $t) {
     $ledger[] = ['kind' => 'treatment', 'id' => (int) $t['id'], 'date' => $t['performed_on'], 'at' => $t['created_at'],
         'charge' => (float) $t['amount'], 'paid' => 0.0,
         'what' => $t['procedure_name'] . ($t['tooth_no'] ? ' · Tooth #' . (int) $t['tooth_no'] : ''),
-        'detail' => implode(' · ', array_filter([$t['notes'], $t['dentist']]))];
+        'detail' => implode(' · ', array_filter([$t['notes'], $t['dentist']])), 'void' => $voidInfo($t)];
 }
 foreach ($payments as $y) {
     $ledger[] = ['kind' => 'payment', 'id' => (int) $y['id'], 'date' => $y['paid_on'], 'at' => $y['created_at'],
         'charge' => 0.0, 'paid' => (float) $y['amount'],
         'what' => 'Payment · ' . PAYMENT_METHODS[$y['method']] . ($y['reference'] ? ' · Ref ' . $y['reference'] : ''),
-        'detail' => implode(' · ', array_filter([$y['notes'], $y['received'] ? 'Received by ' . $y['received'] : null]))];
+        'detail' => implode(' · ', array_filter([$y['notes'], $y['received'] ? 'Received by ' . $y['received'] : null])), 'void' => $voidInfo($y)];
 }
 usort($ledger, fn($a, $b) => [$a['date'], $a['at'], $a['kind'] === 'payment', $a['id']] <=> [$b['date'], $b['at'], $b['kind'] === 'payment', $b['id']]);
 $running = 0.0;
 foreach ($ledger as &$entry) {
+    if ($entry['void']) {
+        $entry['balance'] = null;
+        continue;
+    }
     $running = round($running + $entry['charge'] - $entry['paid'], 2);
     $entry['balance'] = $running;
 }
 unset($entry);
+$counted = array_values(array_filter($ledger, fn($l) => !$l['void']));
+$treatmentCount = count(array_filter($counted, fn($l) => $l['kind'] === 'treatment'));
 
 if (input('format') === 'pdf') {
     require dirname(__DIR__) . '/includes/pdf.php';
@@ -160,8 +185,8 @@ if (input('format') === 'pdf') {
     $pdf = new PdfReport('Statement of account', $patient['full_name'] . ($patient['record_no'] ? ' · ' . $patient['record_no'] : '') . ' · As of ' . date('M j, Y'),
         config('clinic.name'), 'Generated ' . date('M j, Y g:i A') . ' by ' . $user['name']);
     $pdf->stats([
-        ['Total charged', money($patient['charged']), count($treatments) . ' treatment(s)'],
-        ['Total paid', money($patient['paid']), count($payments) . ' payment(s)'],
+        ['Total charged', money($patient['charged']), $treatmentCount . ' treatment(s)'],
+        ['Total paid', money($patient['paid']), (count($counted) - $treatmentCount) . ' payment(s)'],
         [$bal < 0 ? 'Credit' : 'Balance due', money($bal), $bal < 0 ? 'Held for future treatment' : ($bal > 0 ? 'Amount still owed' : 'Fully paid')],
     ]);
     $pdf->table('Charges and payments', [['Date', 2, 'L'], ['Description', 6, 'L'], ['Charge', 2, 'R'], ['Payment', 2, 'R'], ['Balance', 2.8, 'R']],
@@ -171,7 +196,7 @@ if (input('format') === 'pdf') {
             $l['kind'] === 'treatment' ? money($l['charge']) : '',
             $l['kind'] === 'payment' ? [money($l['paid']), $credit] : '',
             [money($l['balance']) . ($l['balance'] < 0 ? ' CR' : ''), $l['balance'] > 0 ? $due : $credit],
-        ], $ledger), 'No charges or payments recorded.');
+        ], $counted), 'No charges or payments recorded.');
     $pdf->download('statement-' . trim(preg_replace('/[^a-z0-9]+/', '-', strtolower($patient['full_name'])), '-') . '-' . date('Y-m-d') . '.pdf');
 }
 
@@ -230,7 +255,7 @@ layout_start($patient['full_name'], 'patients', ['subtitle' => $patient['care_ty
 
 <div class="mini-stats">
   <div class="card"><strong><?= count($appointments) ?></strong><span>Appointments</span></div>
-  <div class="card"><strong><?= count($treatments) ?></strong><span>Treatments</span></div>
+  <div class="card"><strong><?= $treatmentCount ?></strong><span>Treatments</span></div>
   <div class="card"><strong><?= money($patient['charged']) ?></strong><span>Total charged</span></div>
   <div class="card"><strong><?= money($patient['paid']) ?></strong><span>Total paid</span></div>
 </div>
@@ -289,18 +314,22 @@ layout_start($patient['full_name'], 'patients', ['subtitle' => $patient['care_ty
         <button class="btn btn-sm btn-primary" data-open="#treatment-dialog">+ Add treatment</button>
       </div>
     </div>
-    <p class="muted small" style="margin:-8px 0 16px">Oldest first. The balance column shows what the patient owed after each entry.</p>
+    <p class="muted small" style="margin:-8px 0 16px">Oldest first. The balance column shows what the patient owed after each entry. Voided entries are struck through and not counted.</p>
     <div class="table-wrap"><table class="table-cards">
       <thead><tr><th>Date</th><th>Description</th><th class="num">Charge</th><th class="num">Payment</th><th class="num">Balance</th><?php if (can('billing.delete')): ?><th></th><?php endif; ?></tr></thead>
       <tbody>
         <?php foreach ($ledger as $l): ?>
-          <tr>
+          <?php $strike = fn(string $html) => $l['void'] ? "<s>$html</s>" : $html; ?>
+          <tr<?= $l['void'] ? ' class="voided"' : '' ?>>
             <td><?= e(fmt_date($l['date'])) ?></td>
-            <td data-label="Description"><?= e($l['what']) ?><?= $l['detail'] !== '' ? '<br><small class="muted">' . e($l['detail']) . '</small>' : '' ?></td>
-            <td class="num" data-label="Charge"><?= $l['kind'] === 'treatment' ? money($l['charge']) : '' ?></td>
-            <td class="num amount-paid" data-label="Payment"><?= $l['kind'] === 'payment' ? money($l['paid']) : '' ?></td>
-            <td class="num" data-label="Balance"><b class="<?= $l['balance'] > 0 ? 'amount-due' : 'amount-credit' ?>"><?= money($l['balance']) ?><?= $l['balance'] < 0 ? ' credit' : '' ?></b></td>
-            <?php if (can('billing.delete')): ?><td class="num"><form method="post" data-confirm="<?= $l['kind'] === 'treatment' ? 'Remove this treatment charge?' : 'Remove this payment?' ?>"><?= csrf_field() ?><input type="hidden" name="action" value="delete_<?= $l['kind'] ?>"><input type="hidden" name="row_id" value="<?= $l['id'] ?>"><button class="link-btn" aria-label="Remove">✕</button></form></td><?php endif; ?>
+            <td data-label="Description"><?= $strike(e($l['what'])) ?><?= $l['detail'] !== '' ? '<br><small class="muted">' . e($l['detail']) . '</small>' : '' ?><?= $l['void'] ? '<br><small class="void-note">' . e($l['void']) . '</small>' : '' ?></td>
+            <td class="num" data-label="Charge"><?= $l['kind'] === 'treatment' ? $strike(money($l['charge'])) : '' ?></td>
+            <td class="num<?= $l['void'] ? '' : ' amount-paid' ?>" data-label="Payment"><?= $l['kind'] === 'payment' ? $strike(money($l['paid'])) : '' ?></td>
+            <td class="num" data-label="Balance"><?php if ($l['void']): ?><span class="muted small">Not counted</span><?php else: ?><b class="<?= $l['balance'] > 0 ? 'amount-due' : 'amount-credit' ?>"><?= money($l['balance']) ?><?= $l['balance'] < 0 ? ' credit' : '' ?></b><?php endif; ?></td>
+            <?php if (can('billing.delete')): ?><td class="num no-print"><?php if (!$l['void']): ?><button class="link-btn" data-open="#void-dialog" data-fill="<?= e(json_encode([
+                'action' => 'void_' . $l['kind'], 'row_id' => $l['id'], 'void_reason' => '',
+                'void_title' => $l['what'] . ' · ' . money($l['kind'] === 'treatment' ? $l['charge'] : $l['paid']) . ' · ' . fmt_date($l['date']),
+            ])) ?>">Void</button><?php endif; ?></td><?php endif; ?>
           </tr>
         <?php endforeach; ?>
         <?php if (!$ledger): ?><tr><td colspan="6" class="empty">No charges or payments recorded yet.</td></tr><?php endif; ?>
@@ -332,6 +361,19 @@ layout_start($patient['full_name'], 'patients', ['subtitle' => $patient['care_ty
       <div><button class="btn btn-primary" type="submit">Save treatment</button></div>
     </form>
   </dialog>
+
+  <?php if (can('billing.delete')): ?>
+    <dialog id="void-dialog">
+      <form class="dialog-body" method="post">
+        <div class="dialog-head"><h2>Void entry</h2><button type="button" class="close" aria-label="Close">×</button></div>
+        <?= csrf_field() ?><input type="hidden" name="action"><input type="hidden" name="row_id">
+        <p><b data-text="void_title"></b></p>
+        <p class="muted small">The entry stays in the ledger, struck through, and stops counting toward the balance. This can't be undone; if it was voided by mistake, enter it again.</p>
+        <div class="field"><label for="void-reason">Reason</label><input type="text" id="void-reason" name="void_reason" maxlength="255" required placeholder="e.g. Wrong amount, re-entered as ₱1,500"></div>
+        <div><button class="btn btn-danger" type="submit">Void entry</button></div>
+      </form>
+    </dialog>
+  <?php endif; ?>
 
 <?php else: ?>
   <div class="stack">

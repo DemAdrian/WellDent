@@ -113,7 +113,7 @@ A patient's record has three tabs: **Dental Chart**, **Treatments & Billing** an
 1. Click **+ Add treatment**, enter the procedure, date, amount in ₱, optional tooth number and dentist, then click **Save treatment**. Picking a procedure from the price list fills in its standard fee; change it if needed.
 2. Click **+ Log payment** to record money received (next section).
 3. Click **Statement PDF** to download a statement of account for the patient: their totals and the full ledger, ready to print or send.
-4. Only Administrators can remove a treatment or payment with **✕**.
+4. To correct a mistake, an Administrator clicks **Void** on the entry, types the reason (for example "Wrong amount, re-entered as ₱1,500") and clicks **Void entry**. Entries are never deleted: a voided entry stays in the ledger, struck through with the reason, who voided it and when, but no longer counts toward the balance, the reports or the statement. Voiding can't be undone; if you voided the wrong entry, enter it again.
 
 ### Record a payment
 

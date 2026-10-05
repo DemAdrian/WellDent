@@ -10,13 +10,13 @@ if ($to < $from) {
 $range = [$from, $to];
 
 $apptStatus = array_column(q_all('SELECT status, COUNT(*) AS n FROM appointments WHERE DATE(starts_at) BETWEEN ? AND ? GROUP BY status', $range), 'n', 'status');
-$charged = (float) q_val('SELECT COALESCE(SUM(amount), 0) FROM treatments WHERE performed_on BETWEEN ? AND ?', $range);
-$collected = (float) q_val('SELECT COALESCE(SUM(amount), 0) FROM payments WHERE paid_on BETWEEN ? AND ?', $range);
+$charged = (float) q_val('SELECT COALESCE(SUM(amount), 0) FROM treatments WHERE performed_on BETWEEN ? AND ? AND voided_at IS NULL', $range);
+$collected = (float) q_val('SELECT COALESCE(SUM(amount), 0) FROM payments WHERE paid_on BETWEEN ? AND ? AND voided_at IS NULL', $range);
 $newPatients = (int) q_val('SELECT COUNT(*) FROM patients WHERE DATE(created_at) BETWEEN ? AND ?', $range);
 $outstanding = q_all('SELECT p.id, p.full_name, p.phone, b.charged, b.paid, b.balance FROM patients p JOIN ' . BALANCES . " b ON b.patient_id = p.id
     WHERE b.balance > 0 AND p.status <> 'archived' ORDER BY b.balance DESC");
-$byMethod = q_all('SELECT method, COUNT(*) AS n, SUM(amount) AS total FROM payments WHERE paid_on BETWEEN ? AND ? GROUP BY method ORDER BY total DESC', $range);
-$procedures = q_all('SELECT procedure_name, COUNT(*) AS n, SUM(amount) AS total FROM treatments WHERE performed_on BETWEEN ? AND ?
+$byMethod = q_all('SELECT method, COUNT(*) AS n, SUM(amount) AS total FROM payments WHERE paid_on BETWEEN ? AND ? AND voided_at IS NULL GROUP BY method ORDER BY total DESC', $range);
+$procedures = q_all('SELECT procedure_name, COUNT(*) AS n, SUM(amount) AS total FROM treatments WHERE performed_on BETWEEN ? AND ? AND voided_at IS NULL
     GROUP BY procedure_name ORDER BY n DESC LIMIT 10', $range);
 $stock = q_all("SELECT i.name, i.unit, i.quantity, i.min_quantity,
         COALESCE(SUM(CASE WHEN m.type = 'in' THEN m.quantity END), 0) AS qty_in,

@@ -88,6 +88,8 @@ CREATE TABLE IF NOT EXISTS tooth_records (
     FOREIGN KEY (recorded_by) REFERENCES users(id) ON DELETE SET NULL
 ) ENGINE=InnoDB;
 
+-- Billing entries are never deleted: a mistake is voided (voided_at set, with a reason) and left out of
+-- every total. Keep the void columns in sync with ensure_void_columns() in includes/db.php.
 CREATE TABLE IF NOT EXISTS treatments (
     id             INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     patient_id     INT UNSIGNED NOT NULL,
@@ -99,6 +101,9 @@ CREATE TABLE IF NOT EXISTS treatments (
     performed_on   DATE NOT NULL,
     dentist_id     INT UNSIGNED NULL,
     created_at     DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    voided_at      DATETIME NULL,
+    voided_by      INT UNSIGNED NULL,
+    void_reason    VARCHAR(255) NULL,
     INDEX idx_treat_patient (patient_id),
     FOREIGN KEY (patient_id) REFERENCES patients(id) ON DELETE CASCADE,
     FOREIGN KEY (appointment_id) REFERENCES appointments(id) ON DELETE SET NULL,
@@ -115,6 +120,9 @@ CREATE TABLE IF NOT EXISTS payments (
     paid_on     DATE NOT NULL,
     received_by INT UNSIGNED NULL,
     created_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    voided_at   DATETIME NULL,
+    voided_by   INT UNSIGNED NULL,
+    void_reason VARCHAR(255) NULL,
     INDEX idx_pay_patient (patient_id),
     FOREIGN KEY (patient_id) REFERENCES patients(id) ON DELETE CASCADE,
     FOREIGN KEY (received_by) REFERENCES users(id) ON DELETE SET NULL

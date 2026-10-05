@@ -240,6 +240,8 @@ a.card:hover { text-decoration: none; box-shadow: var(--shadow-hover); }
 
 .amount-due { color: var(--coral); font-weight: 600; }
 .amount-credit, .amount-paid { color: var(--link); font-weight: 600; }
+tr.voided td { color: var(--muted); }
+.void-note { color: var(--coral); }
 
 /* ---------- tables ---------- */
 .table-wrap { overflow-x: auto; }
