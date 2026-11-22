@@ -30,7 +30,8 @@ function theme_head(): string
         . "var d=p==='dark'||(p!=='light'&&window.matchMedia('(prefers-color-scheme: dark)').matches);"
         . "document.documentElement.setAttribute('data-theme',d?'dark':'light');"
         . "try{if(localStorage.getItem('welldent-sidebar')==='collapsed')document.documentElement.setAttribute('data-sidebar','collapsed')}catch(e){}})()</script>\n"
-        . '<link rel="stylesheet" href="' . url('assets/css/app.css?v=9') . '">';
+        . '<link rel="stylesheet" href="' . url('assets/css/app.css?v=' . filemtime(APP_ROOT . '/assets/css/app.css')) . '">'
+        . '<link rel="stylesheet" href="' . url('assets/css/branding.css?v=' . filemtime(APP_ROOT . '/assets/css/branding.css')) . '">';
 }
 
 /** Current chair state for the sidebar card. */
@@ -92,7 +93,7 @@ function layout_start(string $title, string $active, array $opts = []): void
   <aside class="sidebar">
     <div class="side-top">
       <a class="brand" href="<?= url() ?>" title="<?= e(config('clinic.name')) ?>">
-        <span class="brand-mark">D</span>
+        <?= clinic_logo() ?>
         <span class="lbl"><strong><?= e(config('clinic.name')) ?></strong><small><?= e(config('clinic.tagline')) ?></small></span>
       </a>
       <button type="button" class="side-toggle" data-sidebar-toggle aria-label="Collapse sidebar" title="Collapse sidebar"><?= icon('menu') ?></button>
@@ -136,12 +137,43 @@ function layout_start(string $title, string $active, array $opts = []): void
 <?php
 }
 
+function clinic_logo(): string
+{
+    return '<img class="brand-mark clinic-logo" src="' . e(url('assets/img/clinic-logo.jpg'))
+        . '" width="64" height="64" alt="">';
+}
+
+function clinic_footer(bool $authPage = false): void
+{
+    ?>
+    <footer class="<?= $authPage ? 'auth-foot' : 'site-foot' ?> clinic-footer" role="contentinfo">
+      <div class="clinic-footer-brand">
+        <?= clinic_logo() ?>
+        <div>
+          <strong><?= e(config('clinic.name')) ?></strong>
+          <span><?= e(config('clinic.tagline')) ?></span>
+        </div>
+      </div>
+      <div class="clinic-footer-credits">
+        <span><strong>WellDent+</strong> by Health++</span>
+        <?php if (!$authPage): ?>
+          <span>Baldonado · Magat · Moya · Perey</span>
+          <span>College of Engineering and Information Technology, Cavite State University – Indang · © <?= date('Y') ?></span>
+        <?php else: ?>
+          <span>Cavite State University – Indang · © <?= date('Y') ?></span>
+        <?php endif; ?>
+      </div>
+    </footer>
+    <?php
+}
+
 function layout_end(): void
 {
+    clinic_footer();
     ?>
   </main>
 </div>
-<script src="<?= url('assets/js/app.js?v=5') ?>"></script>
+<script src="<?= url('assets/js/app.js?v=' . filemtime(APP_ROOT . '/assets/js/app.js')) ?>"></script>
 </body>
 </html>
 <?php

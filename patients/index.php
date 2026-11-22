@@ -92,7 +92,7 @@ layout_start('Patients', 'patients', [
             </td>
             <td data-label="Record status"><?= pill($p['status']) ?></td>
             <td data-label="Added by"><?= $p['added_by'] ? e($p['added_by']) : '<span class="muted">—</span>' ?><br><small class="muted"><?= e(fmt_date($p['created_at'], 'M j, Y')) ?></small></td>
-            <td class="num"><a href="<?= url('patients/view.php') ?>?id=<?= $p['id'] ?>" style="font-weight:600">Open →</a></td>
+            <td class="num"><a href="<?= url('patients/view.php') ?>?id=<?= $p['id'] ?>&amp;tab=chart" style="font-weight:600">Open chart →</a></td>
           </tr>
         <?php endforeach; ?>
         <?php if (!$patients): ?>

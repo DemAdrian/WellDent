@@ -34,6 +34,30 @@ function ensure_void_columns(PDO $pdo): void
         }
         $pdo->exec("ALTER TABLE $table ADD voided_at DATETIME NULL, ADD voided_by INT UNSIGNED NULL, ADD void_reason VARCHAR(255) NULL");
     }
+    // Users' recovery email, for forgot-password links (same column as database/schema.sql).
+    try {
+        if (!$pdo->query("SHOW COLUMNS FROM users LIKE 'email'")->fetch()) {
+            $pdo->exec('ALTER TABLE users ADD email VARCHAR(190) NULL UNIQUE AFTER username');
+        }
+    } catch (PDOException $ex) {
+        return;
+    }
+}
+
+function in_transaction(callable $work)
+{
+    $pdo = db();
+    $pdo->beginTransaction();
+    try {
+        $result = $work();
+        $pdo->commit();
+        return $result;
+    } catch (Throwable $ex) {
+        if ($pdo->inTransaction()) {
+            $pdo->rollBack();
+        }
+        throw $ex;
+    }
 }
 
 function q(string $sql, array $params = []): PDOStatement

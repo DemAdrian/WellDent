@@ -24,12 +24,17 @@ if (is_post()) {
         $username = input('username');
         $password = (string) ($_POST['password'] ?? '');
         $role = input('role');
+        $email = input('email');
         if (input('name') === '' || mb_strlen(input('name')) > 120 || !preg_match('/^[A-Za-z0-9._-]{3,60}$/', $username) || strlen($password) < 8 || !isset(ROLE_LABELS[$role])) {
             flash('error', 'Enter a name, a 3–60 character username, a role, and a password of at least 8 characters.');
+        } elseif ($email !== '' && !valid_email($email)) {
+            flash('error', 'Enter a valid recovery email, or leave it blank.');
         } elseif (q_val('SELECT 1 FROM users WHERE username = ?', [$username])) {
             flash('error', "The username “{$username}” is taken.");
+        } elseif ($email !== '' && q_val('SELECT 1 FROM users WHERE email = ?', [$email])) {
+            flash('error', 'Another account already uses that email.');
         } else {
-            q('INSERT INTO users (name, username, password_hash, role) VALUES (?, ?, ?, ?)', [input('name'), $username, password_hash($password, PASSWORD_DEFAULT), $role]);
+            q('INSERT INTO users (name, username, email, password_hash, role) VALUES (?, ?, ?, ?, ?)', [input('name'), $username, nullable($email), password_hash($password, PASSWORD_DEFAULT), $role]);
             log_activity('user_created', 'user', (int) db()->lastInsertId(), $username);
             flash('success', input('name') . ' can now sign in as ' . $username . '.');
         }
@@ -42,6 +47,41 @@ if (is_post()) {
             log_activity('user_toggled', 'user', $uid);
             flash('success', 'User access updated.');
         }
+    } elseif ($action === 'user_email') {
+        $uid = (int) input('id');
+        $email = input('email');
+        if ($email !== '' && !valid_email($email)) {
+            flash('error', 'Enter a valid email address, or leave it blank to remove it.');
+        } elseif ($email !== '' && q_val('SELECT 1 FROM users WHERE email = ? AND id <> ?', [$email, $uid])) {
+            flash('error', 'Another account already uses that email.');
+        } else {
+            q('UPDATE users SET email = ? WHERE id = ?', [nullable($email), $uid]);
+            log_activity('user_email_changed', 'user', $uid);
+            flash('success', $email === '' ? 'Recovery email removed.' : 'Recovery email saved.');
+        }
+    } elseif ($action === 'user_delete') {
+        $uid = (int) input('id');
+        $error = in_transaction(function () use ($uid, $me) {
+            $target = q_row('SELECT id, name, username, role, is_active FROM users WHERE id = ? FOR UPDATE', [$uid]);
+            if (!$target) {
+                return 'That account no longer exists.';
+            }
+            if ($uid === (int) $me['id']) {
+                return 'You cannot delete your own account.';
+            }
+            if ($target['role'] === 'admin' && $target['is_active']
+                && !q_val("SELECT 1 FROM users WHERE role = 'admin' AND is_active = 1 AND id <> ? FOR UPDATE", [$uid])) {
+                return 'Keep at least one active administrator.';
+            }
+            log_activity('user_deleted', 'user', $uid, "{$target['name']} ({$target['username']})");
+            q('DELETE FROM users WHERE id = ?', [$uid]);
+            return ['username' => $target['username']];
+        });
+        if (is_array($error)) {
+            clear_failed_logins($error['username']); // outside the transaction: it may create its table
+            $error = null;
+        }
+        flash($error ? 'error' : 'success', $error ?? 'Account deleted. Records they created are kept.');
     } elseif ($action === 'user_reset') {
         $password = (string) ($_POST['password'] ?? '');
         if (strlen($password) < 8) {
@@ -133,14 +173,16 @@ layout_start('Settings', 'settings', ['subtitle' => $admin ? 'Clinic users, proc
       <tbody>
         <?php foreach ($users as $i => $u): ?>
           <tr>
-            <td><div class="who"><?= avatar($u['name'], $i) ?><span><strong><?= e($u['name']) ?></strong><small><?= e($u['username']) ?></small></span></div></td>
+            <td><div class="who"><?= avatar($u['name'], $i) ?><span><strong><?= e($u['name']) ?></strong><small><?= e($u['username']) ?><?= $u['email'] ? ' · ' . e($u['email']) : '' ?></small></span></div></td>
             <td data-label="Role"><?= e(ROLE_LABELS[$u['role']]) ?></td>
             <td data-label="Last sign-in"><?= $u['last_login_at'] ? e(fmt_date($u['last_login_at'], 'M j, g:i A')) : '<span class="muted">Never</span>' ?></td>
             <td data-label="Status"><?= $u['is_active'] ? pill('active') : pill('cancelled', 'Disabled') ?></td>
             <td class="num" style="white-space:nowrap">
-              <button class="link-btn" data-open="#reset-dialog" data-fill='<?= e(json_encode(['id' => $u['id'], 'reset_name' => $u['name']])) ?>'>Reset password</button>
+              <button class="link-btn" data-open="#reset-dialog" data-fill='<?= e(json_encode(['id' => $u['id'], 'reset_name' => $u['name']])) ?>'>Reset password</button> ·
+              <button class="link-btn" data-open="#email-dialog" data-fill='<?= e(json_encode(['id' => $u['id'], 'email' => (string) $u['email'], 'email_name' => $u['name']])) ?>'>Email</button>
               <?php if ((int) $u['id'] !== (int) $me['id']): ?> ·
-                <form method="post" style="display:inline" data-confirm="<?= $u['is_active'] ? 'Disable' : 'Enable' ?> <?= e($u['name']) ?>?"><?= csrf_field() ?><input type="hidden" name="action" value="user_toggle"><input type="hidden" name="id" value="<?= $u['id'] ?>"><button class="link-btn"><?= $u['is_active'] ? 'Disable' : 'Enable' ?></button></form>
+                <form method="post" style="display:inline" data-confirm="<?= $u['is_active'] ? 'Disable' : 'Enable' ?> <?= e($u['name']) ?>?"><?= csrf_field() ?><input type="hidden" name="action" value="user_toggle"><input type="hidden" name="id" value="<?= $u['id'] ?>"><button class="link-btn"><?= $u['is_active'] ? 'Disable' : 'Enable' ?></button></form> ·
+                <form method="post" style="display:inline" data-confirm="Permanently delete <?= e($u['name']) ?>’s account? They can no longer sign in, and their name is removed from appointments, charts and the activity log. Patient records are kept. To keep their name on past records, disable the account instead."><?= csrf_field() ?><input type="hidden" name="action" value="user_delete"><input type="hidden" name="id" value="<?= $u['id'] ?>"><button class="link-btn link-danger">Delete</button></form>
               <?php endif; ?>
             </td>
           </tr>
@@ -205,6 +247,7 @@ layout_start('Settings', 'settings', ['subtitle' => $admin ? 'Clinic users, proc
       <div class="field spacer"><label for="u-user">Username</label><input type="text" id="u-user" name="username" required pattern="[A-Za-z0-9._-]{3,60}"></div>
       <div class="field spacer"><label for="u-role">Role</label><select id="u-role" name="role"><?php foreach (ROLE_LABELS as $k => $lbl): ?><option value="<?= $k ?>"<?= selected($k, 'staff') ?>><?= $lbl ?></option><?php endforeach; ?></select></div>
     </div>
+    <div class="field"><label for="u-email">Recovery email <span class="muted">(optional)</span></label><input type="email" id="u-email" name="email" maxlength="190" autocomplete="off"><span class="hint">Lets them reset a forgotten password by email.</span></div>
     <div class="field"><label for="u-pass">Temporary password</label><input type="text" id="u-pass" name="password" minlength="8" required autocomplete="off"><span class="hint">They can change it under their name → Change password.</span></div>
     <div><button class="btn btn-primary" type="submit">Create user</button></div>
   </form>
@@ -229,6 +272,15 @@ layout_start('Settings', 'settings', ['subtitle' => $admin ? 'Clinic users, proc
     <?= csrf_field() ?><input type="hidden" name="action" value="user_reset"><input type="hidden" name="id">
     <div class="field"><label for="r-pass">New password</label><input type="text" id="r-pass" name="password" minlength="8" required autocomplete="off"></div>
     <div><button class="btn btn-primary" type="submit">Reset</button></div>
+  </form>
+</dialog>
+<dialog id="email-dialog">
+  <form class="dialog-body" method="post">
+    <div class="dialog-head"><h2>Recovery email</h2><button type="button" class="close" aria-label="Close">×</button></div>
+    <p>Forgot-password links for <b data-text="email_name"></b> go to this address.</p>
+    <?= csrf_field() ?><input type="hidden" name="action" value="user_email"><input type="hidden" name="id">
+    <div class="field"><label for="e-email">Email</label><input type="email" id="e-email" name="email" maxlength="190" autocomplete="off"><span class="hint">Leave blank to remove it.</span></div>
+    <div><button class="btn btn-primary" type="submit">Save email</button></div>
   </form>
 </dialog>
 <?php endif; ?>

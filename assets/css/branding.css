@@ -1,0 +1,112 @@
+/* Dental Wellness branding */
+:root {
+  --bg: #f6f4ed;
+  --panel: #fffefa;
+  --panel-soft: #f0f6f2;
+  --side: #183d38;
+  --side-2: #2b574e;
+  --side-ink: #e0ede6;
+  --ink: #233d35;
+  --muted: #54675e;
+  --line: #dce6dd;
+  --teal: #266b60;
+  --teal-d: #1c544c;
+  --link: #275f55;
+  --mint: #e1f0e9;
+  --mint-ink: #2a604f;
+  --amber-bg: #f4ead6;
+  --amber-ink: #765622;
+  --brand-gold: #c8a66c;
+  --auth-end: #ddeee5;
+}
+
+@media screen {
+  :root[data-theme="dark"] {
+    --bg: #101e19;
+    --panel: #1a2b24;
+    --panel-soft: #213830;
+    --side: #0d1c17;
+    --side-2: #294c40;
+    --side-ink: #cee1d7;
+    --ink: #e8f1eb;
+    --muted: #abc0b4;
+    --line: #375146;
+    --teal: #296b5c;
+    --teal-d: #205a4e;
+    --link: #8bd3bd;
+    --mint: #1d3b30;
+    --mint-ink: #8bd3bd;
+    --amber-bg: #382e1d;
+    --amber-ink: #edcd92;
+    --brand-gold: #d5b681;
+    --auth-end: #142b22;
+  }
+}
+
+.brand-mark.clinic-logo {
+  object-fit: contain;
+  background: #fff;
+  border-radius: 50%;
+  padding: 2px;
+}
+.auth {
+  grid-template-rows: 1fr auto;
+  gap: 16px;
+}
+.auth .clinic-logo {
+  width: 68px;
+  height: 68px;
+}
+
+.clinic-footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px 20px;
+  margin-top: 28px;
+  padding: 14px 18px;
+  border: 1px solid var(--line);
+  border-inline-start: 4px solid var(--brand-gold);
+  border-radius: 12px;
+  background: linear-gradient(115deg, var(--mint), var(--panel));
+  color: var(--muted);
+  font-size: 13px;
+}
+.clinic-footer-brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+.clinic-footer-brand strong,
+.clinic-footer-brand span {
+  display: block;
+}
+.clinic-footer-brand strong {
+  color: var(--ink);
+}
+.clinic-footer-brand span {
+  font-size: 13px;
+}
+.clinic-footer-credits {
+  display: grid;
+  gap: 2px;
+  text-align: end;
+}
+.auth .clinic-footer {
+  position: static;
+  width: min(420px, 100%);
+  margin-top: 0;
+  text-align: start;
+}
+.auth .clinic-footer-credits {
+  text-align: start;
+}
+@media (max-width: 860px) {
+  .clinic-footer-credits { text-align: start; }
+}
+
+@media print {
+  .clinic-footer { display: none; }
+}

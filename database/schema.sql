@@ -8,11 +8,27 @@ CREATE TABLE IF NOT EXISTS users (
     id            INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     name          VARCHAR(120) NOT NULL,
     username      VARCHAR(60)  NOT NULL UNIQUE,
+    email         VARCHAR(190) NULL UNIQUE,
     password_hash VARCHAR(255) NOT NULL,
     role          ENUM('admin','dentist','staff') NOT NULL DEFAULT 'staff',
     is_active     TINYINT(1) NOT NULL DEFAULT 1,
     last_login_at DATETIME NULL,
     created_at    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB;
+
+-- Forgot-password links. Only a hash of each token is stored; rows without a token record
+-- requests for unknown accounts, so they still count toward the per-device limit.
+CREATE TABLE IF NOT EXISTS password_resets (
+    id         INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    user_id    INT UNSIGNED NULL,
+    token_hash CHAR(64) NULL UNIQUE,
+    ip         VARCHAR(45) NOT NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    expires_at DATETIME NULL,
+    used_at    DATETIME NULL,
+    INDEX idx_resets_user (user_id, created_at),
+    INDEX idx_resets_ip (ip, created_at),
+    FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 ) ENGINE=InnoDB;
 
 CREATE TABLE IF NOT EXISTS patients (

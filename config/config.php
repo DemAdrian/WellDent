@@ -13,7 +13,7 @@ return [
 
     'clinic' => [
         'name'     => 'Dental Wellness',
-        'tagline'  => 'Orthodontics + Preventive',
+        'tagline'  => 'Naic Family Dental Clinic',
         'city'     => 'Manila',
         'phone'    => '',
         'chairs'   => 1,

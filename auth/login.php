@@ -18,7 +18,7 @@ function lockout_message(int $seconds): string
 {
     $minutes = (int) ceil($seconds / 60);
     return 'Too many failed sign-in attempts. Try again in ' . ($minutes <= 1 ? 'a minute' : "$minutes minutes")
-        . ', or ask an administrator to reset your password.';
+        . ', use “Forgot your password?”, or ask an administrator to reset it.';
 }
 
 if (is_post()) {
@@ -52,7 +52,7 @@ if (is_post()) {
 <div class="auth">
   <form class="card stack" method="post">
     <div class="brand">
-      <span class="brand-mark">D</span>
+      <?= clinic_logo() ?>
       <span><strong><?= e(config('clinic.name')) ?></strong><small>WellDent+ clinic system</small></span>
     </div>
     <?php foreach (take_flashes() as $f): ?><div class="flash flash-<?= e($f['type']) ?>" role="status"><?= e($f['message']) ?></div><?php endforeach; ?>
@@ -61,7 +61,9 @@ if (is_post()) {
     <div class="field"><label for="username">Username</label><input type="text" id="username" name="username" value="<?= e(input('username')) ?>" autocomplete="username" required autofocus></div>
     <div class="field"><label for="password">Password</label><input type="password" id="password" name="password" autocomplete="current-password" required></div>
     <button class="btn btn-primary" type="submit">Sign in</button>
+    <a class="small" href="<?= url('auth/forgot.php') ?>">Forgot your password?</a>
   </form>
+  <?php clinic_footer(true); ?>
 </div>
 </body>
 </html>

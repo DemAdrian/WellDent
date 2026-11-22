@@ -11,10 +11,18 @@ if (!$patient) {
 }
 $tab = in_array(input('tab'), ['chart', 'billing', 'info'], true) ? input('tab') : 'chart';
 $back = fn(string $tab) => url('patients/view.php') . "?id=$id&tab=$tab";
+$hasAppointment = patient_has_appointment($id);
+$canChart = can('chart.edit') && $hasAppointment;
+$canVoid = can('billing.delete') && $hasAppointment;
 
 if (is_post()) {
     verify_csrf();
     $action = input('action');
+
+    if (!$hasAppointment && in_array($action, ['tooth', 'treatment', 'void_treatment', 'void_payment'], true)) {
+        flash('error', NO_APPOINTMENT_MESSAGE);
+        redirect($back($action === 'tooth' ? 'chart' : 'billing'));
+    }
 
     if ($action === 'tooth') {
         require_perm('chart.edit');
@@ -229,7 +237,13 @@ $balance = (float) $patient['balance'];
 
 layout_start($patient['full_name'], 'patients', ['subtitle' => $patient['care_type'] . ' · ' . PATIENT_STATUSES[$patient['status']] . ' record']);
 ?>
-<a class="back no-print" href="<?= url('patients/') ?>">← Back to Patients</a>
+<div class="toolbar no-print">
+  <a class="back" href="<?= url('patients/') ?>">← Back to Patients</a>
+  <form method="get" action="<?= url('patients/') ?>" class="row patient-picker" role="search">
+    <input type="search" name="q" aria-label="Find another patient" placeholder="Find another patient…" required>
+    <button class="btn" type="submit">Search</button>
+  </form>
+</div>
 
 <section class="card profile">
   <span class="avatar avatar-2 avatar-lg"><?= e(initials($patient['full_name'])) ?></span>
@@ -242,12 +256,14 @@ layout_start($patient['full_name'], 'patients', ['subtitle' => $patient['care_ty
     <strong class="<?= $balance > 0 ? 'amount-due' : 'amount-credit' ?>"><?= money($balance) ?></strong>
   </div>
   <div class="row no-print">
-    <a class="btn btn-sm" href="<?= url('appointments/form.php') ?>?patient_id=<?= $id ?>">Book</a>
-    <a class="btn btn-sm" href="<?= url('patients/payment.php') ?>?patient_id=<?= $id ?>">Log payment</a>
-    <?php if (can('patients.archive')): ?>
-      <form method="post" data-confirm="<?= $patient['status'] === 'archived' ? 'Restore this patient?' : 'Archive this patient? Their records are kept but hidden from lists. Upcoming appointments, reminders and waitlist entries are cancelled.' ?>">
-        <?= csrf_field() ?><input type="hidden" name="action" value="<?= $patient['status'] === 'archived' ? 'restore' : 'archive' ?>">
-        <button class="btn btn-sm <?= $patient['status'] === 'archived' ? '' : 'btn-danger' ?>" type="submit"><?= $patient['status'] === 'archived' ? 'Restore' : 'Archive' ?></button>
+      <?php if ($patient['status'] !== 'archived'): ?>
+      <a class="btn btn-sm" href="<?= url('appointments/form.php') ?>?patient_id=<?= $id ?>">Book appointment</a>
+    <?php endif; ?>
+    <?php if ($hasAppointment): ?><a class="btn btn-sm" href="<?= url('patients/payment.php') ?>?patient_id=<?= $id ?>">Log payment</a><?php endif; ?>
+    <?php if ($patient['status'] === 'archived' && can('patients.archive')): ?>
+      <form method="post" data-confirm="Restore this patient?">
+        <?= csrf_field() ?><input type="hidden" name="action" value="restore">
+        <button class="btn btn-sm" type="submit">Restore</button>
       </form>
     <?php endif; ?>
   </div>
@@ -266,14 +282,22 @@ layout_start($patient['full_name'], 'patients', ['subtitle' => $patient['care_ty
   <a href="<?= $back('info') ?>" class="<?= $tab === 'info' ? 'active' : '' ?>">Patient Info</a>
 </nav>
 
+<?php if (!$hasAppointment && $tab !== 'info'): ?>
+  <div class="flash flash-info no-appointment-notice no-print" role="status">
+    <span><b>No appointment yet.</b> The dental chart and billing are view-only until this patient has been booked.</span>
+    <?php if ($patient['status'] !== 'archived'): ?><a class="btn btn-sm btn-primary" href="<?= url('appointments/form.php') ?>?patient_id=<?= $id ?>">Book appointment</a><?php endif; ?>
+  </div>
+<?php endif; ?>
+
 <?php if ($tab === 'chart'): ?>
   <section class="card">
     <h2>Interactive Dental Chart</h2>
-    <p class="muted small" style="margin:6px 0 16px"><?= can('chart.edit') ? 'Click any tooth to view its history or update its condition and procedure.' : 'Click any tooth to view its history. Only dentists can change the chart.' ?></p>
+    <p class="muted small" style="margin:6px 0 16px"><?= $canChart ? 'Click any tooth to view its history or update its condition and procedure.'
+        : (!$hasAppointment ? 'Click any tooth to view its history. Book an appointment to update the chart.' : 'Click any tooth to view its history. Only dentists can change the chart.') ?></p>
     <?= render_dental_chart($toothState) ?>
     <?= render_chart_legend() ?>
     <h3 style="margin-bottom:12px">Documented dental conditions</h3>
-    <?php if (!$conditions): ?><p class="muted small">No conditions documented. All teeth are charted as healthy.</p><?php endif; ?>
+    <?php if (!$conditions): ?><p class="muted small">No conditions documented.</p><?php endif; ?>
     <div class="conditions">
       <?php foreach ($conditions as $no => $c): [$label, $color, $tint] = TOOTH_STATUSES[$c['status']]; ?>
         <div class="condition" style="--tint:<?= $tint ?>;--c:<?= $color ?>;border-color:<?= $color ?>33">
@@ -291,7 +315,7 @@ layout_start($patient['full_name'], 'patients', ['subtitle' => $patient['care_ty
     <form class="dialog-body" method="post">
       <div class="dialog-head"><h2 data-text="tooth_title">Tooth</h2><button type="button" class="close" aria-label="Close">×</button></div>
       <div><span class="label">History</span><ul class="history" style="margin-top:8px"></ul></div>
-      <?php if (can('chart.edit')): ?>
+      <?php if ($canChart): ?>
         <?= csrf_field() ?><input type="hidden" name="action" value="tooth"><input type="hidden" name="tooth_no">
         <div class="field"><label for="t-status">Condition</label>
           <select id="t-status" name="status"><?php foreach (TOOTH_STATUSES as $k => [$label]): ?><option value="<?= $k ?>"><?= e($label) ?></option><?php endforeach; ?></select></div>
@@ -310,13 +334,15 @@ layout_start($patient['full_name'], 'patients', ['subtitle' => $patient['care_ty
     <div class="card-head"><h2>Account ledger</h2>
       <div class="row no-print">
         <a class="btn btn-sm" href="<?= $back('billing') ?>&amp;format=pdf">Statement PDF</a>
-        <a class="btn btn-sm" href="<?= url('patients/payment.php') ?>?patient_id=<?= $id ?>">+ Log payment</a>
-        <button class="btn btn-sm btn-primary" data-open="#treatment-dialog">+ Add treatment</button>
+        <?php if ($hasAppointment): ?>
+          <a class="btn btn-sm" href="<?= url('patients/payment.php') ?>?patient_id=<?= $id ?>">+ Log payment</a>
+          <button class="btn btn-sm btn-primary" data-open="#treatment-dialog">+ Add treatment</button>
+        <?php endif; ?>
       </div>
     </div>
     <p class="muted small" style="margin:-8px 0 16px">Oldest first. The balance column shows what the patient owed after each entry. Voided entries are struck through and not counted.</p>
     <div class="table-wrap"><table class="table-cards">
-      <thead><tr><th>Date</th><th>Description</th><th class="num">Charge</th><th class="num">Payment</th><th class="num">Balance</th><?php if (can('billing.delete')): ?><th></th><?php endif; ?></tr></thead>
+      <thead><tr><th>Date</th><th>Description</th><th class="num">Charge</th><th class="num">Payment</th><th class="num">Balance</th><?php if ($canVoid): ?><th></th><?php endif; ?></tr></thead>
       <tbody>
         <?php foreach ($ledger as $l): ?>
           <?php $strike = fn(string $html) => $l['void'] ? "<s>$html</s>" : $html; ?>
@@ -326,7 +352,7 @@ layout_start($patient['full_name'], 'patients', ['subtitle' => $patient['care_ty
             <td class="num" data-label="Charge"><?= $l['kind'] === 'treatment' ? $strike(money($l['charge'])) : '' ?></td>
             <td class="num<?= $l['void'] ? '' : ' amount-paid' ?>" data-label="Payment"><?= $l['kind'] === 'payment' ? $strike(money($l['paid'])) : '' ?></td>
             <td class="num" data-label="Balance"><?php if ($l['void']): ?><span class="muted small">Not counted</span><?php else: ?><b class="<?= $l['balance'] > 0 ? 'amount-due' : 'amount-credit' ?>"><?= money($l['balance']) ?><?= $l['balance'] < 0 ? ' credit' : '' ?></b><?php endif; ?></td>
-            <?php if (can('billing.delete')): ?><td class="num no-print"><?php if (!$l['void']): ?><button class="link-btn" data-open="#void-dialog" data-fill="<?= e(json_encode([
+            <?php if ($canVoid): ?><td class="num no-print"><?php if (!$l['void']): ?><button class="link-btn" data-open="#void-dialog" data-fill="<?= e(json_encode([
                 'action' => 'void_' . $l['kind'], 'row_id' => $l['id'], 'void_reason' => '',
                 'void_title' => $l['what'] . ' · ' . money($l['kind'] === 'treatment' ? $l['charge'] : $l['paid']) . ' · ' . fmt_date($l['date']),
             ])) ?>">Void</button><?php endif; ?></td><?php endif; ?>
@@ -362,7 +388,7 @@ layout_start($patient['full_name'], 'patients', ['subtitle' => $patient['care_ty
     </form>
   </dialog>
 
-  <?php if (can('billing.delete')): ?>
+  <?php if ($canVoid): ?>
     <dialog id="void-dialog">
       <form class="dialog-body" method="post">
         <div class="dialog-head"><h2>Void entry</h2><button type="button" class="close" aria-label="Close">×</button></div>
@@ -395,7 +421,7 @@ layout_start($patient['full_name'], 'patients', ['subtitle' => $patient['care_ty
     </section>
 
     <section class="card">
-      <div class="card-head"><h2>Appointment history</h2><a class="btn btn-sm btn-primary no-print" href="<?= url('appointments/form.php') ?>?patient_id=<?= $id ?>">+ Book</a></div>
+      <div class="card-head"><h2>Appointment history</h2><?php if ($patient['status'] !== 'archived'): ?><a class="btn btn-sm btn-primary no-print" href="<?= url('appointments/form.php') ?>?patient_id=<?= $id ?>">+ Book</a><?php endif; ?></div>
       <div class="table-wrap"><table class="table-cards">
         <thead><tr><th>Date</th><th>Procedure</th><th>Dentist</th><th>Status</th><th></th></tr></thead>
         <tbody>
@@ -405,7 +431,9 @@ layout_start($patient['full_name'], 'patients', ['subtitle' => $patient['care_ty
               <td data-label="Procedure"><?= e($a['procedure_name']) ?></td>
               <td data-label="Dentist"><?= e($a['dentist'] ?? '—') ?></td>
               <td data-label="Status"><?= pill($a['status']) ?></td>
-              <td class="num"><a href="<?= url('appointments/form.php') ?>?id=<?= $a['id'] ?>">Edit</a></td>
+              <td class="num"><a href="<?= url('appointments/form.php') ?>?id=<?= $a['id'] ?>">Open</a>
+                <?php if ($patient['status'] !== 'archived'): ?> · <a href="<?= url('appointments/form.php') ?>?rebook=<?= $a['id'] ?>">Rebook</a><?php endif; ?>
+              </td>
             </tr>
           <?php endforeach; ?>
           <?php if (!$appointments): ?><tr><td colspan="5" class="empty">No appointments yet.</td></tr><?php endif; ?>

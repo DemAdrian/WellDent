@@ -75,6 +75,25 @@
     if (e.target.matches('[data-autosubmit]')) e.target.form.submit();
   });
 
+    document.querySelectorAll('[data-filter-select]').forEach(function (field) {
+    var select = document.getElementById(field.dataset.filterSelect);
+    if (!select) return;
+    field.closest('[data-select-search]').hidden = false;
+    field.addEventListener('input', function () {
+      var terms = field.value.trim().toLowerCase().split(/\s+/);
+      Array.from(select.options).forEach(function (option) {
+        var text = (option.textContent + ' ' + (option.dataset.record || '')).toLowerCase();
+        option.hidden = !!option.value && !option.selected && !terms.every(function (term) { return text.includes(term); });
+      });
+    });
+  });
+
+
+  // Collapsed sections marked data-print-open still print in full.
+  window.addEventListener('beforeprint', function () {
+    document.querySelectorAll('details[data-print-open]').forEach(function (d) { d.open = true; });
+  });
+
   // ?open=dialogId opens that dialog on load (used by dashboard quick actions).
   var auto = new URLSearchParams(location.search).get('open');
   if (auto && /^[\w-]+$/.test(auto)) openDialog('#' + auto);

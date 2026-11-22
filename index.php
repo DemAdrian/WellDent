@@ -8,28 +8,56 @@ $today = q_all("SELECT a.*, p.full_name FROM appointments a JOIN patients p ON p
 $confirmed = count(array_filter($today, fn($a) => $a['status'] === 'confirmed'));
 $waiting = count(array_filter($today, fn($a) => $a['status'] === 'arrived'));
 
-$balances = q_row('SELECT COALESCE(SUM(CASE WHEN b.balance > 0 THEN b.balance END), 0) AS total,
-    COUNT(CASE WHEN b.balance > 0 THEN 1 END) AS accounts
-    FROM patients p JOIN ' . BALANCES . " b ON b.patient_id = p.id WHERE p.status <> 'archived'");
+$date = new DateTimeImmutable('today');
+$periods = [
+    'today' => ['Today', $date],
+    'week' => ['This week', $date->modify('monday this week')],
+    'recent' => ['Last 7 days', $date->modify('-6 days')],
+    'month' => ['This month', $date->modify('first day of this month')],
+];
+$period = input('period', 'recent');
+if (!isset($periods[$period])) {
+    $period = 'recent';
+}
+[$periodLabel, $from] = $periods[$period];
+$range = [$from->format('Y-m-d'), $date->modify('+1 day')->format('Y-m-d')];
+$rangeLabel = $from == $date ? $date->format('M j, Y') : $from->format('M j') . ' – ' . $date->format('M j, Y');
+$reportLink = url('reports/') . '?' . http_build_query(['from' => $range[0], 'to' => $date->format('Y-m-d')]);
 
+$income = q_row('SELECT COALESCE(SUM(amount), 0) AS total, COUNT(*) AS payments FROM payments
+    WHERE paid_on >= ? AND paid_on < ? AND voided_at IS NULL', $range);
 $reminders = q_row("SELECT COUNT(*) AS total, COUNT(CASE WHEN send_at <= NOW() THEN 1 END) AS due
     FROM reminders WHERE status = 'scheduled'");
-
 $lowStock = q_all('SELECT name, quantity, min_quantity, unit FROM inventory_items
     WHERE is_active = 1 AND quantity <= min_quantity ORDER BY quantity / GREATEST(min_quantity, 1)');
 $critical = count(array_filter($lowStock, fn($i) => $i['quantity'] <= intdiv((int) $i['min_quantity'], 2)));
 
-// Patient flow: appointments attended or booked per day for the last 7 days.
 $flowRows = q_all("SELECT DATE(starts_at) AS d, COUNT(*) AS n FROM appointments
-    WHERE starts_at >= CURDATE() - INTERVAL 6 DAY AND starts_at < CURDATE() + INTERVAL 1 DAY
-    AND status NOT IN ('cancelled','no_show') GROUP BY DATE(starts_at)");
+    WHERE starts_at >= ? AND starts_at < ? AND status NOT IN ('cancelled','no_show') GROUP BY DATE(starts_at)", $range);
 $flowMap = array_column($flowRows, 'n', 'd');
 $flow = [];
-for ($i = 6; $i >= 0; $i--) {
-    $d = date('Y-m-d', strtotime("-$i day"));
-    $flow[$d] = (int) ($flowMap[$d] ?? 0);
+for ($day = $from; $day <= $date; $day = $day->modify('+1 day')) {
+    $key = $day->format('Y-m-d');
+    $flow[$key] = (int) ($flowMap[$key] ?? 0);
 }
 $flowMax = max(1, max($flow));
+
+$procedures = q_all('SELECT procedure_name, COUNT(*) AS n FROM treatments
+    WHERE performed_on >= ? AND performed_on < ? AND voided_at IS NULL
+    GROUP BY procedure_name ORDER BY n DESC, procedure_name', $range);
+$procedureTotal = array_sum(array_column($procedures, 'n'));
+if (count($procedures) > 6) {
+    $procedures = array_slice($procedures, 0, 5);
+    $procedures[] = ['procedure_name' => 'Other procedures', 'n' => $procedureTotal - array_sum(array_column($procedures, 'n'))];
+}
+$pieColors = ['#458e85', '#ad814b', '#729167', '#657fa4', '#ae6a71', '#7c6d90'];
+$pieStops = [];
+$offset = 0;
+foreach ($procedures as $i => $procedure) {
+    $end = $offset + 100 * $procedure['n'] / $procedureTotal;
+    $pieStops[] = sprintf('%s %.5F%% %.5F%%', $pieColors[$i], $offset, $end);
+    $offset = $end;
+}
 
 // Attention needed: things someone should act on today.
 $attention = [];
@@ -62,38 +90,63 @@ $nameParts = preg_split('/\s+/', preg_replace('/^Dr\.?\s+/i', '', $user['name'])
 $name = $user['role'] === 'dentist' ? 'Dr. ' . end($nameParts) : $nameParts[0];
 
 layout_start("$greeting, $name", 'dashboard', [
-    'subtitle' => 'A calm view of your clinic today',
-    'action'   => '<a class="btn btn-primary" href="' . url('appointments/form.php') . '">+ New appointment</a>',
+    'subtitle' => $date->format('l, F j, Y'),
 ]);
 ?>
-<section class="grid-4">
-  <a class="card stat" href="<?= url('appointments/') ?>">
-    <i class="dot" style="background:var(--teal)"></i>
-    <div class="label">Patients today</div>
-    <div class="value"><?= count($today) ?></div>
-    <div class="sub"><?= $confirmed ?> confirmed · <?= $waiting ?> waiting</div>
-  </a>
-  <a class="card stat" href="<?= url('patients/') ?>?filter=balance">
-    <i class="dot" style="background:var(--coral)"></i>
-    <div class="label">Pending balances</div>
-    <div class="value"><?= money($balances['total']) ?></div>
-    <div class="sub"><?= (int) $balances['accounts'] ?> open accounts</div>
-  </a>
-  <a class="card stat" href="<?= url('reminders/') ?>">
-    <i class="dot" style="background:#e0b23c"></i>
-    <div class="label">Reminders scheduled</div>
-    <div class="value"><?= (int) $reminders['total'] ?></div>
-    <div class="sub"><?= (int) $reminders['due'] ?> due to send now</div>
-  </a>
-  <a class="card stat" href="<?= url('inventory/') ?>?filter=low">
-    <i class="dot" style="background:var(--blue)"></i>
-    <div class="label">Low stock</div>
-    <div class="value"><?= count($lowStock) ?></div>
-    <div class="sub"><?= $critical ?> item<?= $critical === 1 ? '' : 's' ?> critical</div>
-  </a>
+<section class="dashboard-overview">
+  <div class="dashboard-overview-head">
+    <div><h2>Clinic overview</h2><p class="muted"><?= e($rangeLabel) ?></p></div>
+    <form method="get" class="dashboard-filter">
+      <label for="dashboard-period">Date range</label>
+      <div class="row">
+        <select id="dashboard-period" name="period">
+          <?php foreach ($periods as $key => [$label]): ?>
+            <option value="<?= $key ?>"<?= selected($key, $period) ?>><?= e($label) ?></option>
+          <?php endforeach; ?>
+        </select>
+        <button class="btn" type="submit">Apply</button>
+      </div>
+    </form>
+  </div>
+  <div class="grid-4 dashboard-stats">
+    <a class="card stat" href="<?= url('appointments/') ?>">
+      <i class="dot" style="background:var(--teal)"></i>
+      <div class="label">Patients today</div>
+      <div class="value"><?= count($today) ?></div>
+      <div class="sub"><?= $confirmed ?> confirmed · <?= $waiting ?> waiting</div>
+    </a>
+    <a class="card stat dashboard-income" href="<?= e($reportLink) ?>">
+      <i class="dot" style="background:var(--amber-ink)"></i>
+      <div class="label">Total income</div>
+      <div class="value"><?= money($income['total']) ?></div>
+      <div class="sub"><?= (int) $income['payments'] ?> payments · <?= e($periodLabel) ?></div>
+    </a>
+    <a class="card stat" href="<?= url('reminders/') ?>">
+      <i class="dot" style="background:#e0b23c"></i>
+      <div class="label">Reminders scheduled</div>
+      <div class="value"><?= (int) $reminders['total'] ?></div>
+      <div class="sub"><?= (int) $reminders['due'] ?> due now</div>
+    </a>
+    <a class="card stat" href="<?= url('inventory/') ?>?filter=low">
+      <i class="dot" style="background:var(--blue)"></i>
+      <div class="label">Low stock</div>
+      <div class="value"><?= count($lowStock) ?></div>
+      <div class="sub"><?= $critical ?> currently critical</div>
+    </a>
+  </div>
 </section>
 
-<div class="layout-side">
+<section class="card dashboard-actions">
+  <h2>Quick actions</h2>
+  <div class="row">
+    <a class="btn btn-primary" href="<?= url('appointments/form.php') ?>">+ New appointment</a>
+    <a class="btn" href="<?= url('patients/form.php') ?>">Add patient</a>
+    <a class="btn" href="<?= url('patients/payment.php') ?>">Log payment</a>
+    <a class="btn" href="<?= url('inventory/') ?>?open=stock-dialog">Stock in</a>
+  </div>
+</section>
+
+<div class="dashboard-columns">
   <div class="stack">
     <section class="card">
       <h2>Today · <?= date('l, F j') ?></h2>
@@ -113,29 +166,35 @@ layout_start("$greeting, $name", 'dashboard', [
     </section>
 
     <section class="card">
-      <h2>Patient flow · last 7 days</h2>
-      <div class="bars" role="img" aria-label="Appointments per day for the last 7 days">
-        <?php foreach ($flow as $d => $n): ?>
-          <div class="bar<?= $d === date('Y-m-d') ? ' today' : '' ?>" title="<?= e(fmt_date($d, 'D, M j')) ?>: <?= $n ?> patients">
-            <b><?= $n ?></b>
-            <span class="fill" style="height:<?= round($n / $flowMax * 85) ?>%"></span>
+      <div class="card-head"><h2>Patient flow</h2><span class="muted small"><?= e($periodLabel) ?></span></div>
+      <div class="dashboard-flow" aria-label="Appointments per day" role="list">
+        <?php foreach ($flow as $day => $count): ?>
+          <div class="dashboard-flow-day" role="listitem" aria-label="<?= e(fmt_date($day, 'M j')) ?> · <?= $count ?> appointments">
+            <strong><?= $count ?></strong>
+            <div class="dashboard-flow-track"><span style="height:<?= round($count / $flowMax * 100) ?>%"></span></div>
+            <small><?= e(fmt_date($day, count($flow) > 7 ? 'j' : 'D')) ?></small>
           </div>
         <?php endforeach; ?>
-      </div>
-      <div class="bar-labels">
-        <?php foreach (array_keys($flow) as $d): ?><span><?= $d === date('Y-m-d') ? 'Today' : date('D', strtotime($d)) ?></span><?php endforeach; ?>
       </div>
     </section>
   </div>
 
   <div class="stack">
     <section class="card">
-      <h2>Quick actions</h2>
-      <div class="row">
-        <a class="btn btn-primary" href="<?= url('patients/form.php') ?>">Add patient</a>
-        <a class="btn" href="<?= url('patients/payment.php') ?>">Log payment</a>
-        <a class="btn" href="<?= url('inventory/') ?>?open=stock-dialog">Stock in</a>
-      </div>
+      <div class="card-head"><h2>Procedures</h2><span class="muted small"><?= e($periodLabel) ?></span></div>
+      <?php if ($procedures): ?>
+        <div class="dashboard-procedures">
+          <div class="dashboard-pie" aria-hidden="true" style="background:conic-gradient(<?= e(implode(', ', $pieStops)) ?>)"></div>
+          <ul class="dashboard-legend">
+            <?php foreach ($procedures as $i => $procedure): ?>
+              <li><i aria-hidden="true" style="background:<?= $pieColors[$i] ?>"></i><span><?= e($procedure['procedure_name']) ?></span><strong><?= (int) $procedure['n'] ?></strong></li>
+            <?php endforeach; ?>
+          </ul>
+        </div>
+        <p class="muted small dashboard-procedure-total"><?= $procedureTotal ?> recorded treatments</p>
+      <?php else: ?>
+        <p class="empty">No treatments recorded in this date range.</p>
+      <?php endif; ?>
     </section>
 
     <section class="card">

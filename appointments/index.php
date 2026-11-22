@@ -4,7 +4,10 @@ require_login();
 
 $view = input('view', 'day') === 'week' ? 'week' : 'day';
 $date = valid_date(input('date')) ? input('date') : date('Y-m-d');
-$self = fn(array $extra = []) => url('appointments/') . '?' . http_build_query(array_merge(['view' => $view, 'date' => $date], $extra));
+$search = mb_substr(input('q'), 0, 150);
+$page = max(1, min(1000000, (int) input('page', '1')));
+$self = fn(array $extra = []) => url('appointments/') . '?' . http_build_query(array_merge(
+    ['view' => $view, 'date' => $date], $search === '' ? [] : ['q' => $search, 'page' => $page], $extra));
 
 if (is_post()) {
     verify_csrf();
@@ -13,26 +16,39 @@ if (is_post()) {
     if ($action === 'status') {
         $id = (int) input('id');
         $status = input('status');
-        $appt = q_row('SELECT * FROM appointments WHERE id = ?', [$id]);
-        if ($appt && isset(APPOINTMENT_STATUSES[$status])) {
+        if (isset(APPOINTMENT_STATUSES[$status])) {
             try {
-                // Re-opening a cancelled or no-show slot must not double-book the chair.
-                $clash = with_booking_lock(function () use ($appt, $status) {
-                    $reopening = in_array($appt['status'], NON_BLOCKING_STATUSES, true) && !in_array($status, NON_BLOCKING_STATUSES, true);
-                    $clash = $reopening ? appointment_clash((int) $appt['chair'], $appt['starts_at'], (int) $appt['duration_min'], (int) $appt['id']) : null;
-                    if (!$clash) {
-                        q('UPDATE appointments SET status = ? WHERE id = ?', [$status, $appt['id']]);
-                    }
-                    return $clash;
+                $error = with_booking_lock(function () use ($id, $status) {
+                    return in_transaction(function () use ($id, $status) {
+                        $appt = q_row('SELECT a.*, p.status AS patient_status FROM appointments a
+                            JOIN patients p ON p.id = a.patient_id WHERE a.id = ? FOR UPDATE', [$id]);
+                        if (!$appt) {
+                            return 'Appointment could not be found.';
+                        }
+                        if ($appt['status'] === $status) {
+                            return null;
+                        }
+                        $blocking = !in_array($status, NON_BLOCKING_STATUSES, true);
+                        if ($blocking && $appt['patient_status'] === 'archived') {
+                            return 'Restore the patient record before reopening this appointment.';
+                        }
+                        if ($blocking && ($clash = appointment_clash((int) $appt['chair'], $appt['starts_at'], (int) $appt['duration_min'], $id))) {
+                            return "Chair {$appt['chair']} is already booked at " . fmt_time($clash['starts_at']) . " ({$clash['full_name']}). Choose another time.";
+                        }
+                        q('UPDATE appointments SET status = ? WHERE id = ?', [$status, $id]);
+                        schedule_appointment_reminders($id);
+                        log_activity('appointment_status', 'appointment', $id, $status);
+                        return null;
+                    });
                 });
-                if ($clash) {
-                    flash('error', "Chair {$appt['chair']} is already booked at " . fmt_time($clash['starts_at']) . " ({$clash['full_name']}). Reschedule this appointment instead.");
+                if ($error) {
+                    flash('error', $error);
+                } elseif ($status === 'no_show') {
+                    flash('success', 'Marked as no-show. The appointment no longer blocks chair time.');
                 } else {
-                    schedule_appointment_reminders($id); // cancels them for closed statuses, restores them when re-opened
-                    log_activity('appointment_status', 'appointment', $id, $status);
                     flash('success', 'Status updated to ' . APPOINTMENT_STATUSES[$status] . '.');
                 }
-            } catch (RuntimeException $ex) {
+            } catch (BookingBusyException $ex) {
                 flash('error', $ex->getMessage());
             }
         }
@@ -81,31 +97,80 @@ if ($view === 'week') {
     $label = fmt_date($date, 'M j, Y');
 }
 
-$appointments = q_all('SELECT a.*, p.full_name, p.phone FROM appointments a JOIN patients p ON p.id = a.patient_id
+$appointments = q_all('SELECT a.*, p.full_name, p.phone, p.status AS patient_status FROM appointments a JOIN patients p ON p.id = a.patient_id
     WHERE a.starts_at >= ? AND a.starts_at < ? + INTERVAL 1 DAY ORDER BY a.starts_at, a.chair',
     [$rangeStart, $rangeEnd]);
+$matches = [];
+$hasNext = false;
+if ($search !== '') {
+    $like = '%' . strtr($search, ['!' => '!!', '%' => '!%', '_' => '!_']) . '%';
+    $offset = ($page - 1) * 25;
+    $matches = q_all("SELECT a.id, a.starts_at, a.status, a.procedure_name, a.patient_id, p.full_name, p.status AS patient_status
+        FROM appointments a JOIN patients p ON p.id = a.patient_id
+        WHERE p.full_name LIKE ? ESCAPE '!' OR p.phone LIKE ? ESCAPE '!' OR p.record_no LIKE ? ESCAPE '!'
+            OR a.procedure_name LIKE ? ESCAPE '!'
+        ORDER BY a.starts_at DESC, a.id DESC LIMIT 26 OFFSET $offset", [$like, $like, $like, $like]);
+    $hasNext = count($matches) > 25;
+    $matches = array_slice($matches, 0, 25);
+}
 
 $notices = q_all('SELECT * FROM notices WHERE starts_on <= ? AND ends_on >= ? ORDER BY starts_on', [$rangeEnd, $rangeStart]);
 $waitlist = q_all('SELECT w.*, p.full_name FROM waitlist w JOIN patients p ON p.id = w.patient_id
     WHERE w.resolved_at IS NULL ORDER BY w.created_at');
 
 // Capacity for the selected day: booked minutes vs. open chair hours.
-$active = array_filter($appointments, fn($a) => !in_array($a['status'], ['cancelled', 'no_show'], true));
+$active = array_filter($appointments, fn($a) => !in_array($a['status'], NON_BLOCKING_STATUSES, true));
+$history = array_filter($appointments, fn($a) => in_array($a['status'], NON_BLOCKING_STATUSES, true));
 $openMinutes = (strtotime(config('clinic.closes')) - strtotime(config('clinic.opens'))) / 60 * config('clinic.chairs');
 $bookedMinutes = array_sum(array_column($view === 'day' ? $active : [], 'duration_min'));
 $capacity = $openMinutes > 0 ? min(100, (int) round($bookedMinutes / $openMinutes * 100)) : 0;
 $counts = array_count_values(array_column($appointments, 'status'));
 
 layout_start('Appointments', 'appointments', [
-    'subtitle' => 'Chair-aware scheduling with live confirmations and delays',
+    'subtitle' => $search === '' ? $label : 'Search across all dates',
     'action'   => '<a class="btn btn-primary" href="' . url('appointments/form.php') . '?date=' . e($date) . '">+ New appointment</a>',
 ]);
 ?>
+<form method="get" class="toolbar appointment-search" role="search">
+  <input type="hidden" name="view" value="<?= e($view) ?>">
+  <input type="hidden" name="date" value="<?= e($date) ?>">
+  <input type="search" class="spacer" name="q" value="<?= e($search) ?>" maxlength="150" aria-label="Search appointments" placeholder="Name, phone, record ID, or procedure">
+  <button class="btn btn-primary" type="submit">Search</button>
+  <?php if ($search !== ''): ?><a class="btn" href="<?= e($self(['q' => '', 'page' => 1])) ?>">Back to schedule</a><?php endif; ?>
+</form>
+
+<?php if ($search !== ''): ?>
+<section class="card">
+  <h2>Results for “<?= e($search) ?>”</h2>
+  <div class="table-wrap"><table class="table-cards">
+    <thead><tr><th>Patient</th><th>Appointment</th><th>Procedure</th><th>Status</th><th>Actions</th></tr></thead>
+    <tbody>
+      <?php foreach ($matches as $a): ?>
+        <tr>
+          <td><a href="<?= url('patients/view.php') ?>?id=<?= $a['patient_id'] ?>&amp;tab=chart"><?= e($a['full_name']) ?></a></td>
+          <td data-label="Appointment"><?= e(fmt_date($a['starts_at'], 'M j, Y · g:i A')) ?></td>
+          <td data-label="Procedure"><?= e($a['procedure_name']) ?></td>
+          <td data-label="Status"><?= pill($a['status']) ?></td>
+          <td data-label="Actions"><a href="<?= url('appointments/form.php') ?>?id=<?= $a['id'] ?>">Open</a>
+            <?php if ($a['patient_status'] !== 'archived'): ?> · <a href="<?= url('appointments/form.php') ?>?rebook=<?= $a['id'] ?>">Rebook</a><?php endif; ?>
+          </td>
+        </tr>
+      <?php endforeach; ?>
+      <?php if (!$matches): ?><tr><td class="empty" colspan="5">No appointments found. <a href="<?= url('patients/') ?>?q=<?= e(rawurlencode($search)) ?>">Search patient records</a></td></tr><?php endif; ?>
+    </tbody>
+  </table></div>
+  <?php if ($page > 1 || $hasNext): ?>
+    <div class="row">
+      <?php if ($page > 1): ?><a class="btn btn-sm" href="<?= e($self(['page' => $page - 1])) ?>">‹ Previous</a><?php endif; ?>
+      <?php if ($hasNext): ?><a class="btn btn-sm" href="<?= e($self(['page' => $page + 1])) ?>">Next ›</a><?php endif; ?>
+    </div>
+  <?php endif; ?>
+</section>
+<?php else: ?>
 <div class="toolbar">
   <div class="row">
     <a class="btn<?= $view === 'day' ? ' is-on' : '' ?>" href="<?= url('appointments/') ?>?view=day&amp;date=<?= e($date) ?>">Day</a>
     <a class="btn<?= $view === 'week' ? ' is-on' : '' ?>" href="<?= url('appointments/') ?>?view=week&amp;date=<?= e($date) ?>">Week</a>
-    <a class="btn" href="<?= url('appointments/') ?>?view=<?= $view ?>">Today</a>
   </div>
   <div class="row">
     <a class="btn" href="<?= e($self(['date' => $prev])) ?>" aria-label="Previous">‹</a>
@@ -134,17 +199,17 @@ layout_start('Appointments', 'appointments', [
     <?php if ($view === 'day'): ?>
       <div class="day-table">
         <div class="day-head"><span>TIME</span><span>CHAIR<?= config('clinic.chairs') > 1 ? 'S' : ' 1' ?> · <?= round($bookedMinutes / 60, 1) ?> of <?= round($openMinutes / 60, 1) ?> hours booked</span></div>
-        <?php if (!$appointments): ?>
+        <?php if (!$active): ?>
           <div class="slot"><span class="t"></span><p class="open-slot">Nothing booked on this day. <a href="<?= url('appointments/form.php') ?>?date=<?= e($date) ?>">Book an appointment</a></p></div>
         <?php endif; ?>
-        <?php foreach ($appointments as $a): ?>
+        <?php foreach ($active as $a): ?>
           <div class="slot">
             <span class="t"><?= fmt_time($a['starts_at']) ?></span>
             <div class="appt <?= e($a['status']) ?>">
               <div class="appt-top"><strong><?= e($a['full_name']) ?></strong><?= pill($a['status']) ?></div>
               <div class="meta"><?= e($a['procedure_name']) ?> · <?= (int) $a['duration_min'] ?> min<?= config('clinic.chairs') > 1 ? ' · Chair ' . (int) $a['chair'] : '' ?><?= $a['notes'] ? ' · ' . e($a['notes']) : '' ?></div>
               <div class="actions">
-                <a href="<?= url('appointments/form.php') ?>?id=<?= $a['id'] ?>">Reschedule</a> ·
+                <a href="<?= url('appointments/form.php') ?>?id=<?= $a['id'] ?>">Open appointment</a>
                 <form method="post" class="row" style="display:inline-flex">
                   <?= csrf_field() ?><input type="hidden" name="action" value="status"><input type="hidden" name="id" value="<?= $a['id'] ?>">
                   <label for="st<?= $a['id'] ?>" style="font-weight:600;color:var(--teal-d)">Update status</label>
@@ -152,8 +217,11 @@ layout_start('Appointments', 'appointments', [
                     <?php foreach (APPOINTMENT_STATUSES as $k => $lbl): ?><option value="<?= $k ?>"<?= selected($k, $a['status']) ?>><?= $lbl ?></option><?php endforeach; ?>
                   </select>
                   <noscript><button class="btn btn-sm">Save</button></noscript>
-                </form> ·
-                <a href="<?= url('patients/view.php') ?>?id=<?= $a['patient_id'] ?>">View patient</a>
+                </form>
+                <a href="<?= url('patients/view.php') ?>?id=<?= $a['patient_id'] ?>&amp;tab=chart">Dental chart</a>
+                <?php if ($a['status'] === 'completed' && $a['patient_status'] !== 'archived'): ?>
+                  <a href="<?= url('appointments/form.php') ?>?rebook=<?= $a['id'] ?>">Rebook</a>
+                <?php endif; ?>
               </div>
             </div>
           </div>
@@ -163,7 +231,7 @@ layout_start('Appointments', 'appointments', [
       <div class="week">
         <?php for ($i = 0; $i < 7; $i++):
             $d = date('Y-m-d', strtotime("$rangeStart +$i day"));
-            $dayAppts = array_filter($appointments, fn($a) => substr($a['starts_at'], 0, 10) === $d); ?>
+            $dayAppts = array_filter($active, fn($a) => substr($a['starts_at'], 0, 10) === $d); ?>
           <div class="week-day<?= $d === date('Y-m-d') ? ' today' : '' ?>">
             <h3><a href="<?= url('appointments/') ?>?view=day&amp;date=<?= $d ?>" style="color:inherit"><?= date('D j', strtotime($d)) ?></a></h3>
             <?php foreach ($dayAppts as $a): ?>
@@ -175,6 +243,48 @@ layout_start('Appointments', 'appointments', [
           </div>
         <?php endfor; ?>
       </div>
+    <?php endif; ?>
+    <?php if ($history): ?>
+      <details class="card appointment-history" <?= $view === 'day' ? 'open' : '' ?>>
+        <summary>No-shows and cancellations (<?= count($history) ?>)</summary>
+        <ul class="kv">
+          <?php foreach ($history as $a):
+              $slotStart = max(strtotime($a['starts_at']), (int) (floor(time() / 60) + 1) * 60);
+              $slotEnd = strtotime($a['starts_at']) + (int) $a['duration_min'] * 60;
+              $remaining = (int) (($slotEnd - $slotStart) / 60);
+              $slotDate = date('Y-m-d', $slotStart);
+              $fitsClinicHours = $slotStart >= strtotime($slotDate . ' ' . config('clinic.opens'))
+                  && $slotEnd <= strtotime($slotDate . ' ' . config('clinic.closes'));
+              $hasOverlap = false;
+              if ($a['status'] === 'no_show' && $remaining >= 10 && $fitsClinicHours
+                  && (int) $a['chair'] <= (int) config('clinic.chairs')) {
+                  foreach ($active as $other) {
+                      $otherStart = strtotime($other['starts_at']);
+                      if ((int) $other['chair'] === (int) $a['chair'] && $otherStart < $slotEnd
+                          && $otherStart + (int) $other['duration_min'] * 60 > $slotStart) {
+                          $hasOverlap = true;
+                          break;
+                      }
+                  }
+                  $slotQuery = http_build_query(['date' => $slotDate, 'time' => date('H:i', $slotStart),
+                      'chair' => $a['chair'], 'duration_min' => $remaining]);
+              } else {
+                  $slotQuery = '';
+              }
+          ?>
+            <li class="history-entry">
+              <div><strong><?= e($a['full_name']) ?></strong> <?= pill($a['status']) ?>
+                <div class="muted small"><?= e(fmt_date($a['starts_at'], 'M j · g:i A')) ?> · <?= e($a['procedure_name']) ?></div>
+              </div>
+              <div class="row">
+                <a class="btn btn-sm" href="<?= url('appointments/form.php') ?>?id=<?= $a['id'] ?>">Open</a>
+                <?php if ($a['patient_status'] !== 'archived'): ?><a class="btn btn-sm" href="<?= url('appointments/form.php') ?>?rebook=<?= $a['id'] ?>">Rebook</a><?php endif; ?>
+                <?php if ($slotQuery !== '' && !$hasOverlap): ?><a class="btn btn-sm btn-primary" href="<?= url('appointments/form.php') ?>?<?= e($slotQuery) ?>">Book released slot</a><?php endif; ?>
+              </div>
+            </li>
+          <?php endforeach; ?>
+        </ul>
+      </details>
     <?php endif; ?>
   </div>
 
@@ -245,5 +355,6 @@ layout_start('Appointments', 'appointments', [
     <div><button class="btn btn-primary" type="submit">Post notice</button></div>
   </form>
 </dialog>
+<?php endif; ?>
 <?php endif; ?>
 <?php layout_end();

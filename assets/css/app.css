@@ -121,8 +121,8 @@ p { margin: 0; }
 .brand strong { display: block; font-size: 18px; font-weight: 600; }
 .brand small { display: block; font-size: 11px; letter-spacing: .06em; text-transform: uppercase; opacity: .8; }
 .nav { display: flex; flex-direction: column; gap: 6px; }
-.nav a { display: flex; flex-direction: column; gap: 8px; padding: 14px 16px; border-radius: 14px; color: var(--side-ink); transition: background-color .15s, color .15s, gap .28s var(--ease), padding .28s var(--ease); }
-.nav a .lbl { display: block; max-height: 24px; overflow: hidden; white-space: nowrap; transition: opacity .15s, max-height .28s var(--ease); }
+.nav a { display: flex; flex-direction: row; align-items: center; gap: 14px; padding: 14px 16px; border-radius: 14px; color: var(--side-ink); transition: background-color .15s, color .15s, gap .28s var(--ease), padding .28s var(--ease); }
+.nav a .lbl { display: block; min-width: 0; max-width: 200px; overflow: hidden; white-space: nowrap; transition: opacity .15s, max-width .28s var(--ease); }
 .nav a:hover { background: rgba(255, 255, 255, .06); text-decoration: none; }
 .nav a.active { background: var(--side-2); color: #fff; font-weight: 600; }
 /* Account section: clicking the name drops the options open inside the sidebar. */
@@ -164,7 +164,7 @@ p { margin: 0; }
   :root[data-sidebar="collapsed"] .side-account .chev,
   :root[data-sidebar="collapsed"] .chair-card { display: none; }
   :root[data-sidebar="collapsed"] .nav a { gap: 0; padding: 14px 20px; }
-  :root[data-sidebar="collapsed"] .nav a .lbl { max-height: 0; opacity: 0; }
+  :root[data-sidebar="collapsed"] .nav a .lbl { max-width: 0; opacity: 0; }
   :root[data-sidebar="collapsed"] .side-account summary { justify-content: center; padding: 8px 0; }
   :root[data-sidebar="collapsed"] .side-account-menu a,
   :root[data-sidebar="collapsed"] .side-account-menu button { justify-content: center; padding: 12px 0; }
@@ -176,6 +176,9 @@ p { margin: 0; }
 .chair-card span { font-size: 13px; opacity: .8; }
 
 .main { padding: 32px 40px 56px; min-width: 0; }
+.site-foot { margin-top: 48px; padding-top: 18px; border-top: 1px solid var(--line); display: flex; flex-wrap: wrap; justify-content: space-between; gap: 6px 24px; font-size: 12.5px; color: var(--muted); }
+.site-foot strong { color: var(--ink); }
+.auth-foot { position: fixed; left: 0; right: 0; bottom: 14px; padding: 0 16px; text-align: center; font-size: 12.5px; color: var(--muted); }
 .page-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; margin-bottom: 28px; flex-wrap: wrap; }
 .page-head p { margin-top: 6px; }
 .head-actions { display: flex; align-items: center; gap: 14px; }
@@ -221,6 +224,11 @@ a.card:hover { text-decoration: none; box-shadow: var(--shadow-hover); }
 .btn.is-on { background: var(--teal); border-color: var(--teal); color: #fff; }
 .link-btn { background: none; border: 0; padding: 0; font: inherit; font-size: 13px; font-weight: 600; color: var(--link); cursor: pointer; }
 .link-btn:hover { text-decoration: underline; }
+.link-btn.link-danger { color: var(--red); }
+.no-appointment-notice { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px 16px; margin-bottom: 16px; }
+.activity-more { margin-top: 12px; }
+.activity-more summary { cursor: pointer; font-weight: 600; color: var(--link); padding: 6px 0; }
+.activity-more[open] summary { margin-bottom: 8px; }
 
 .pill { display: inline-block; font-size: 12px; font-weight: 600; padding: 4px 11px; border-radius: 999px; background: var(--gray-bg); color: var(--muted); white-space: nowrap; }
 .pill-confirmed, .pill-active, .pill-sent { background: var(--mint); color: var(--mint-ink); }
@@ -519,4 +527,63 @@ dialog[open]::backdrop { animation: fade-in .22s ease; }
   .layout-half { grid-template-columns: 1fr 1fr; gap: 16px; }
   .stat .value { font-size: 24px; margin: 8px 0; }
   body { background: #fff; }
+}
+
+/* Dashboard */
+.dashboard-overview { margin-bottom: 20px; padding: 22px; border: 1px solid var(--line); border-radius: var(--radius); background: linear-gradient(120deg, var(--mint), var(--panel-soft)); }
+.dashboard-overview-head { display: flex; justify-content: space-between; align-items: flex-end; flex-wrap: wrap; gap: 14px; margin-bottom: 18px; }
+.dashboard-overview-head h2 { font-size: 24px; }
+.dashboard-filter label { display: block; margin-bottom: 4px; font-size: 13px; font-weight: 600; }
+.dashboard-filter select { width: auto; flex: 1; background: var(--panel); }
+
+.dashboard-stats { margin-bottom: 0; gap: 14px; }
+.dashboard-stats .card { border: 1px solid var(--line); box-shadow: none; }
+.dashboard-stats .label { padding-right: 18px; }
+.dashboard-stats .stat .value { font-size: clamp(22px, 2.65vw, 34px); margin: 10px 0 6px; overflow-wrap: anywhere; }
+.dashboard-income { background: var(--amber-bg); }
+
+.dashboard-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 12px 22px; margin-bottom: 20px; padding: 16px 20px; }
+.dashboard-actions > h2 { margin: 0; }
+.dashboard-actions .btn { padding: 8px 13px; font-size: 14px; }
+.dashboard-columns { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 20px; align-items: start; }
+
+.dashboard-flow { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px; }
+.dashboard-flow-day { flex: 1 0 20px; text-align: center; font-size: 12px; }
+.dashboard-flow-track { display: flex; align-items: flex-end; height: 90px; margin: 4px 0; border-radius: 6px; background: var(--panel-soft); }
+.dashboard-flow-track span { width: 100%; max-width: 64px; margin: 0 auto; border-radius: 6px; background: var(--teal); }
+
+.dashboard-procedures { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 22px; }
+.dashboard-pie { width: clamp(120px, 40%, 168px); aspect-ratio: 1; border-radius: 50%; outline: 1px solid var(--line); outline-offset: 4px; }
+.dashboard-legend { display: grid; gap: 8px; list-style: none; padding: 0; margin: 0; min-width: min(150px, 100%); flex: 1; }
+.dashboard-legend li { display: grid; grid-template-columns: 9px minmax(0, 1fr) auto; align-items: center; gap: 8px; font-size: 13px; }
+.dashboard-legend i { width: 9px; height: 9px; border-radius: 50%; }
+.dashboard-procedure-total { margin-top: 16px; }
+
+@media (max-width: 860px) {
+  .dashboard-columns { grid-template-columns: minmax(0, 1fr); }
+}
+
+@media (max-width: 480px) {
+  .dashboard-overview { padding: 14px; }
+  .dashboard-actions .row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); width: 100%; }
+  .dashboard-actions .btn { white-space: normal; text-align: center; }
+}
+
+/* Appointment search and progress */
+.appointment-search input { min-width: 180px; background: var(--panel); }
+.appointment-history { margin-top: 16px; }
+.appointment-history summary { cursor: pointer; font-weight: 600; }
+.appointment-history[open] summary { margin-bottom: 12px; }
+.history-entry { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; padding: 10px 0; border-top: 1px solid var(--line); }
+.appointment-progress { list-style: none; padding: 0; margin: 0; }
+.appointment-progress li, .appointment-progress-empty { padding-top: 12px; margin-top: 14px; border-top: 1px solid var(--line); }
+.appointment-progress p { margin-top: 6px; white-space: pre-wrap; }
+.patient-picker { flex: 1; justify-content: flex-end; max-width: 420px; }
+.patient-picker input { width: auto; flex: 1; background: var(--panel); }
+.patient-picker input:focus { background: var(--input-focus); }
+[data-select-search][hidden] { display: none; }
+
+@media (max-width: 480px) {
+  .appointment-search input { flex-basis: 100%; }
+  .patient-picker { flex-basis: 100%; }
 }
