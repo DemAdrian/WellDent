@@ -100,7 +100,7 @@ if (is_post()) {
             log_activity('patient_created', 'patient', $id, $values['full_name']);
             flash('success', $draft ? 'Draft saved. Finish the chart when you have the details.' : 'Patient created.');
         }
-        redirect(url('patients/view.php') . '?id=' . $id . '&tab=info');
+        redirect(url('patients/view.php') . '?id=' . $id . '&tab=' . ($patient ? 'info' : 'chart'));
     }
 }
 

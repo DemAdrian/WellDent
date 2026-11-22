@@ -70,6 +70,8 @@ Until you configure a provider, reminders are written to `storage/outbox.log` (t
    'email' => ['driver' => 'mail', 'from' => 'you@gmail.com', 'from_name' => 'Dental Wellness'],
    ```
 
+**Forgot-password emails** use the same email setup. Each user needs a recovery email (My account, or Settings → Clinic users → Email). Reset links point to the address the sign-in page was opened with, but only if it is this computer's own name or IP. If staff reach WellDent+ another way, set `'app_url' => 'http://192.168.1.20/WellDent'` in `config/config.local.php`. With the `log` driver, the links appear in `storage/outbox.log`.
+
 **Sending on a schedule:** use the **Send due now** button, or set up Windows Task Scheduler to run this every 15 minutes:
 
 ```

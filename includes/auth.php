@@ -172,3 +172,140 @@ function attempt_login(string $username, string $password): bool
     q('UPDATE users SET last_login_at = NOW() WHERE id = ?', [$user['id']]);
     return true;
 }
+
+/*
+ * Forgot password. A user with a recovery email gets a single-use link valid for
+ * RESET_LINK_MINUTES. Only the SHA-256 of the token is stored, so a database backup can't be
+ * used to reset anyone's password.
+ */
+const RESET_LINK_MINUTES = 30;
+const RESET_MAX_PER_USER = 3;   // per hour
+const RESET_MAX_PER_DEVICE = 10; // per hour
+
+function valid_email(string $email): bool
+{
+    return $email !== '' && strlen($email) <= 190 && filter_var($email, FILTER_VALIDATE_EMAIL) !== false;
+}
+
+function ensure_password_resets_table(): void
+{
+    static $done = false;
+    if (!$done) {
+        q('CREATE TABLE IF NOT EXISTS password_resets (
+            id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+            user_id INT UNSIGNED NULL,
+            token_hash CHAR(64) NULL UNIQUE,
+            ip VARCHAR(45) NOT NULL,
+            created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            expires_at DATETIME NULL,
+            used_at DATETIME NULL,
+            INDEX idx_resets_user (user_id, created_at),
+            INDEX idx_resets_ip (ip, created_at),
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+        ) ENGINE=InnoDB');
+        $done = true;
+    }
+}
+
+/**
+ * The address emailed links should point to. Uses config('app_url') when set; otherwise the
+ * address this page was opened with, but only if it is this computer's own name or IP, so a
+ * forged Host header can't send someone a link to another site.
+ */
+function app_base_url(): ?string
+{
+    $configured = rtrim((string) config('app_url', ''), '/');
+    if ($configured !== '') {
+        return $configured;
+    }
+    $host = strtolower((string) ($_SERVER['HTTP_HOST'] ?? ''));
+    if (!preg_match('/^([a-z0-9.-]+)(:\d{1,5})?$/D', $host, $m)) {
+        return null;
+    }
+    $self = strtolower((string) gethostname());
+    $trusted = array_merge(['localhost', '127.0.0.1', $self], gethostbynamel($self) ?: []);
+    if (!in_array($m[1], $trusted, true)) {
+        return null;
+    }
+    return (is_https() ? 'https://' : 'http://') . $host . rtrim(url(), '/');
+}
+
+/**
+ * Emails a reset link when the username or email matches an active account with a recovery
+ * email. Says nothing either way, so the form can't be used to discover usernames.
+ */
+function request_password_reset(string $identifier, string $ip): void
+{
+    ensure_password_resets_table();
+    q('DELETE FROM password_resets WHERE created_at < NOW() - INTERVAL 1 DAY');
+    $deviceCount = (int) q_val('SELECT COUNT(*) FROM password_resets WHERE ip = ? AND created_at > NOW() - INTERVAL 1 HOUR', [$ip]);
+    if ($deviceCount >= RESET_MAX_PER_DEVICE) {
+        return;
+    }
+    $identifier = trim($identifier);
+    $user = $identifier === '' ? null : q_row('SELECT id, name, username, email FROM users
+        WHERE is_active = 1 AND email IS NOT NULL AND (username = ? OR email = ?) LIMIT 1', [$identifier, $identifier]);
+    if (!$user) {
+        q('INSERT INTO password_resets (ip) VALUES (?)', [$ip]);
+        return;
+    }
+    $userCount = (int) q_val('SELECT COUNT(*) FROM password_resets WHERE user_id = ? AND created_at > NOW() - INTERVAL 1 HOUR', [$user['id']]);
+    if ($userCount >= RESET_MAX_PER_USER) {
+        q('INSERT INTO password_resets (ip) VALUES (?)', [$ip]);
+        return;
+    }
+    $base = app_base_url();
+    if ($base === null) {
+        error_log('Password reset not sent: open WellDent+ by this computer\'s address or set app_url in config.local.php.');
+        log_activity('password_reset_failed', 'user', (int) $user['id'], 'Unrecognised site address', (int) $user['id']);
+        return;
+    }
+
+    $token = bin2hex(random_bytes(32));
+    // A new link replaces any earlier one that hasn't been used.
+    q('UPDATE password_resets SET used_at = NOW() WHERE user_id = ? AND used_at IS NULL AND token_hash IS NOT NULL', [$user['id']]);
+    q('INSERT INTO password_resets (user_id, token_hash, ip, expires_at) VALUES (?, ?, ?, NOW() + INTERVAL ' . RESET_LINK_MINUTES . ' MINUTE)',
+        [$user['id'], hash('sha256', $token), $ip]);
+
+    $link = $base . '/auth/reset.php?token=' . $token;
+    $message = "Hi " . first_name($user['name']) . ",\n\n"
+        . "Someone asked to reset the WellDent+ password for the username \"{$user['username']}\" at " . config('clinic.name') . ".\n\n"
+        . "To choose a new password, open this link within " . RESET_LINK_MINUTES . " minutes:\n$link\n\n"
+        . "If you didn't ask for this, ignore this email; your password stays the same.\n";
+    [$ok, $error] = send_email($user['email'], config('clinic.name') . ' password reset', $message);
+    log_activity($ok ? 'password_reset_requested' : 'password_reset_failed', 'user', (int) $user['id'], $ok ? null : $error, (int) $user['id']);
+}
+
+/** The pending reset for this token, or null when it is unknown, used, or expired. */
+function find_password_reset(string $token): ?array
+{
+    if (!preg_match('/^[0-9a-f]{64}$/D', $token)) {
+        return null;
+    }
+    ensure_password_resets_table();
+    return q_row('SELECT r.id, r.user_id, u.username FROM password_resets r JOIN users u ON u.id = r.user_id AND u.is_active = 1
+        WHERE r.token_hash = ? AND r.used_at IS NULL AND r.expires_at > NOW()', [hash('sha256', $token)]);
+}
+
+/** Sets the new password and uses up the link. False when the link stopped being valid meanwhile. */
+function complete_password_reset(string $token, string $password): bool
+{
+    // Before the transaction: CREATE TABLE IF NOT EXISTS would commit it early.
+    ensure_password_resets_table();
+    ensure_login_attempts_table();
+    $username = in_transaction(function () use ($token, $password) {
+        $reset = find_password_reset($token);
+        if (!$reset || !q_row('SELECT id FROM password_resets WHERE id = ? AND used_at IS NULL FOR UPDATE', [$reset['id']])) {
+            return null;
+        }
+        q('UPDATE users SET password_hash = ? WHERE id = ?', [password_hash($password, PASSWORD_DEFAULT), $reset['user_id']]);
+        q('UPDATE password_resets SET used_at = NOW() WHERE user_id = ? AND used_at IS NULL', [$reset['user_id']]);
+        log_activity('password_reset_by_email', 'user', (int) $reset['user_id'], null, (int) $reset['user_id']);
+        return $reset['username'];
+    });
+    if ($username === null) {
+        return false;
+    }
+    clear_failed_logins($username); // also lifts a sign-in lockout
+    return true;
+}

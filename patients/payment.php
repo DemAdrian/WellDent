@@ -19,6 +19,7 @@ if (is_post()) {
     }
     $patientId = (int) $values['patient_id'];
     if (!q_val('SELECT 1 FROM patients WHERE id = ?', [$patientId])) $errors[] = 'Choose a patient.';
+    elseif (!patient_has_appointment($patientId)) $errors[] = NO_APPOINTMENT_MESSAGE;
     if (!valid_amount($values['amount'])) $errors[] = 'Enter an amount from ₱0.01 to ' . money(MAX_AMOUNT) . ', with at most 2 decimals.';
     $errors = array_merge($errors, length_errors($values, ['reference' => ['Reference', 80], 'notes' => ['Notes', 255]]));
     if (!isset(PAYMENT_METHODS[$values['method']])) $errors[] = 'Choose a payment method.';
@@ -34,18 +35,28 @@ if (is_post()) {
 }
 
 // Show balances beside names so staff can see who owes what.
-$patients = q_all('SELECT p.id, p.full_name, b.balance FROM patients p JOIN ' . BALANCES . " b ON b.patient_id = p.id
+$patients = q_all('SELECT p.id, p.full_name, b.balance,
+        EXISTS(SELECT 1 FROM appointments a WHERE a.patient_id = p.id AND a.status <> \'cancelled\') AS has_appt
+    FROM patients p JOIN ' . BALANCES . " b ON b.patient_id = p.id
     WHERE p.status <> 'archived' ORDER BY b.balance > 0 DESC, p.full_name");
+$preselected = (int) $values['patient_id'];
+$preselectedBlocked = $preselected && !is_post() && !patient_has_appointment($preselected);
 
 layout_start('Log payment', 'patients', ['subtitle' => 'Record a payment against a patient account']);
 ?>
 <form class="card stack" method="post" style="max-width:640px">
   <?php if ($errors): ?><ul class="errors"><?php foreach ($errors as $err): ?><li><?= e($err) ?></li><?php endforeach; ?></ul><?php endif; ?>
+  <?php if ($preselectedBlocked): ?>
+    <div class="flash flash-info no-appointment-notice" role="status">
+      <span><?= e(NO_APPOINTMENT_MESSAGE) ?></span>
+      <a class="btn btn-sm btn-primary" href="<?= url('appointments/form.php') ?>?patient_id=<?= $preselected ?>">Book appointment</a>
+    </div>
+  <?php endif; ?>
   <?= csrf_field() ?>
   <div class="field"><label for="patient_id">Patient</label>
     <select id="patient_id" name="patient_id" required><option value="">Choose patient…</option>
       <?php foreach ($patients as $p): ?>
-        <option value="<?= $p['id'] ?>"<?= selected($p['id'], $values['patient_id']) ?>><?= e($p['full_name']) ?><?= $p['balance'] > 0 ? ' · ' . money($p['balance']) . ' due' : ($p['balance'] < 0 ? ' · ' . money($p['balance']) . ' credit' : '') ?></option>
+        <option value="<?= $p['id'] ?>"<?= $p['has_appt'] ? selected($p['id'], $values['patient_id']) : ' disabled' ?>><?= e($p['full_name']) ?><?= $p['has_appt'] ? '' : ' · no appointment yet' ?><?= $p['balance'] > 0 ? ' · ' . money($p['balance']) . ' due' : ($p['balance'] < 0 ? ' · ' . money($p['balance']) . ' credit' : '') ?></option>
       <?php endforeach; ?>
     </select></div>
   <div class="form-grid">

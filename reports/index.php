@@ -69,9 +69,17 @@ layout_start('Reports', 'reports', [
     <button class="btn btn-primary" type="submit" style="align-self:flex-end">Apply</button>
   </div>
   <div class="row">
-    <a class="btn btn-sm" href="<?= url('reports/') ?>?from=<?= date('Y-m-d') ?>&amp;to=<?= date('Y-m-d') ?>">Today</a>
-    <a class="btn btn-sm" href="<?= url('reports/') ?>?from=<?= date('Y-m-01') ?>&amp;to=<?= date('Y-m-d') ?>">This month</a>
-    <a class="btn btn-sm" href="<?= url('reports/') ?>?from=<?= date('Y-01-01') ?>&amp;to=<?= date('Y-m-d') ?>">This year</a>
+    <?php
+    $today = date('Y-m-d');
+    $quickRanges = [
+        'Today'      => $today,
+        'This week'  => date('Y-m-d', strtotime('monday this week')),
+        'This month' => date('Y-m-01'),
+        'This year'  => date('Y-01-01'),
+    ];
+    foreach ($quickRanges as $quickLabel => $quickFrom): ?>
+      <a class="btn btn-sm<?= $from === $quickFrom && $to === $today ? ' is-on' : '' ?>" href="<?= url('reports/') ?>?from=<?= $quickFrom ?>&amp;to=<?= $today ?>"><?= $quickLabel ?></a>
+    <?php endforeach; ?>
   </div>
 </form>
 
@@ -122,16 +130,28 @@ layout_start('Reports', 'reports', [
     </tbody></table></div>
   </section>
 
-  <section class="card">
-    <h2>Activity log</h2>
+  <?php
+  $activityTable = function (array $rows): void { ?>
     <div class="table-wrap"><table class="table-cards"><thead><tr><th>When</th><th>User</th><th>Action</th><th>Details</th></tr></thead><tbody>
-      <?php foreach ($activity as $a): ?>
+      <?php foreach ($rows as $a): ?>
         <tr><td style="white-space:nowrap"><?= e(fmt_date($a['created_at'], 'M j, g:i A')) ?></td><td data-label="User"><?= e($a['name'] ?? '—') ?></td>
           <td data-label="Action"><?= e(ucfirst(str_replace('_', ' ', $a['action']))) ?></td>
           <td data-label="Details"><?= $a['entity'] === 'patient' && $a['entity_id'] ? '<a href="' . url('patients/view.php') . '?id=' . (int) $a['entity_id'] . '">' . e($a['details'] ?: 'Patient') . '</a>' : e($a['details'] ?? '') ?></td></tr>
       <?php endforeach; ?>
-      <?php if (!$activity): ?><tr><td colspan="4" class="empty">No activity in this range.</td></tr><?php endif; ?>
+      <?php if (!$rows): ?><tr><td colspan="4" class="empty">No activity in this range.</td></tr><?php endif; ?>
     </tbody></table></div>
+  <?php };
+  $olderActivity = array_slice($activity, 5);
+  ?>
+  <section class="card">
+    <h2>Activity log</h2>
+    <?php $activityTable(array_slice($activity, 0, 5)); ?>
+    <?php if ($olderActivity): ?>
+      <details class="activity-more" data-print-open>
+        <summary>Show <?= count($olderActivity) ?> more</summary>
+        <?php $activityTable($olderActivity); ?>
+      </details>
+    <?php endif; ?>
   </section>
 </div>
 <?php layout_end();

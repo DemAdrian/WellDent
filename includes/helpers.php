@@ -235,7 +235,7 @@ function avatar(string $name, int $seed = 0): string
 /** Patients for <select> pickers. */
 function patient_options(): array
 {
-    return q_all("SELECT id, full_name, phone FROM patients WHERE status <> 'archived' ORDER BY full_name");
+    return q_all("SELECT id, full_name, phone, record_no FROM patients WHERE status <> 'archived' ORDER BY full_name");
 }
 
 function dentist_options(): array

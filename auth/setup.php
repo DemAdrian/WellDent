@@ -48,7 +48,7 @@ if ($userCount === 0 && is_post()) {
 <div class="auth">
   <form class="card stack" method="post">
     <div class="brand">
-      <span class="brand-mark">D</span>
+      <?= clinic_logo() ?>
       <span><strong>WellDent+ setup</strong><small>Create the first administrator</small></span>
     </div>
     <?php if ($problem): ?>
@@ -63,5 +63,6 @@ if ($userCount === 0 && is_post()) {
     <?php endif; ?>
   </form>
 </div>
+<?php clinic_footer(); ?>
 </body>
 </html>
