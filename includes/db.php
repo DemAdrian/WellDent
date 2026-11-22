@@ -14,6 +14,7 @@ function db(): PDO
         // Keep NOW()/CURDATE() in the clinic's timezone.
         $pdo->exec("SET time_zone = '" . (new DateTime())->format('P') . "'");
         ensure_void_columns($pdo);
+        ensure_patient_record_columns($pdo);
     }
     return $pdo;
 }

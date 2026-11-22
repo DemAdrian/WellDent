@@ -34,7 +34,42 @@ CREATE TABLE IF NOT EXISTS password_resets (
 CREATE TABLE IF NOT EXISTS patients (
     id                     INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     record_no              VARCHAR(20) NULL UNIQUE,
-    full_name              VARCHAR(150) NOT NULL,
+    full_name              VARCHAR(150) NOT NULL, -- first, middle and last name, as shown across the app
+    last_name              VARCHAR(80) NULL,
+    first_name             VARCHAR(80) NULL,
+    middle_name            VARCHAR(80) NULL,
+    nickname               VARCHAR(60) NULL,
+    religion               VARCHAR(60) NULL,
+    nationality            VARCHAR(60) NULL,
+    occupation             VARCHAR(100) NULL,
+    guardian_name          VARCHAR(150) NULL,
+    guardian_occupation    VARCHAR(100) NULL,
+    referred_by            VARCHAR(150) NULL,
+    consultation_reason    VARCHAR(255) NULL,
+    previous_dentist       VARCHAR(150) NULL,
+    last_dental_visit      VARCHAR(60) NULL,
+    physician_name         VARCHAR(150) NULL,
+    physician_specialty    VARCHAR(100) NULL,
+    physician_address      VARCHAR(255) NULL,
+    physician_phone        VARCHAR(30) NULL,
+    -- Medical history questions from the paper record: 1 = yes, 0 = no, NULL = not answered.
+    good_health            TINYINT(1) NULL,
+    under_treatment        TINYINT(1) NULL,
+    treatment_condition    VARCHAR(255) NULL,
+    serious_illness        TINYINT(1) NULL,
+    illness_details        VARCHAR(255) NULL,
+    hospitalized           TINYINT(1) NULL,
+    hospitalization_details VARCHAR(255) NULL,
+    takes_medication       TINYINT(1) NULL,
+    uses_tobacco           TINYINT(1) NULL,
+    uses_drugs             TINYINT(1) NULL,
+    allergy_list           VARCHAR(255) NULL, -- comma-separated keys; other allergies go in `allergies`
+    is_pregnant            TINYINT(1) NULL,
+    is_nursing             TINYINT(1) NULL,
+    birth_control          TINYINT(1) NULL,
+    blood_type             VARCHAR(10) NULL,
+    blood_pressure         VARCHAR(20) NULL,
+    medical_conditions     TEXT NULL,         -- comma-separated keys; other conditions go in `conditions`
     birth_date             DATE NULL,
     sex                    ENUM('female','male') NULL,
     phone                  VARCHAR(30) NULL,
@@ -93,8 +128,10 @@ CREATE TABLE IF NOT EXISTS waitlist (
 CREATE TABLE IF NOT EXISTS tooth_records (
     id             INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
     patient_id     INT UNSIGNED NOT NULL,
-    tooth_no       TINYINT UNSIGNED NOT NULL,
-    status         ENUM('healthy','cavity','filled','crown','extracted','root_canal','braces','missing','prosthetic') NOT NULL,
+    tooth_no       TINYINT UNSIGNED NOT NULL, -- FDI: 11–48 permanent, 51–85 temporary
+    status         VARCHAR(10) NULL,          -- condition code: / D M MO Im Sp Rf Un
+    treatment      VARCHAR(10) NULL,          -- restoration or surgery code: Am Co JC In Imp S Rm Ab X XO
+    surfaces       VARCHAR(20) NULL,          -- marked surfaces, e.g. "M,O"
     procedure_name VARCHAR(120) NULL,
     notes          VARCHAR(255) NULL,
     recorded_by    INT UNSIGNED NULL,
@@ -102,6 +139,30 @@ CREATE TABLE IF NOT EXISTS tooth_records (
     INDEX idx_tooth (patient_id, tooth_no),
     FOREIGN KEY (patient_id) REFERENCES patients(id) ON DELETE CASCADE,
     FOREIGN KEY (recorded_by) REFERENCES users(id) ON DELETE SET NULL
+) ENGINE=InnoDB;
+
+-- Examination findings under the paper Dental Record Chart; one current row per patient.
+-- Checkbox groups are comma-separated keys (see includes/dental_chart.php).
+CREATE TABLE IF NOT EXISTS dental_exams (
+    patient_id        INT UNSIGNED PRIMARY KEY,
+    periodontal       VARCHAR(100) NULL,
+    molar_class       VARCHAR(40) NULL,
+    canine_class      VARCHAR(40) NULL,
+    overjet           VARCHAR(40) NULL,
+    overbite          VARCHAR(40) NULL,
+    midline_deviation VARCHAR(40) NULL,
+    crossbite         VARCHAR(40) NULL,
+    appliances        VARCHAR(100) NULL,
+    appliance_other   VARCHAR(120) NULL,
+    tmd               VARCHAR(100) NULL,
+    xrays             VARCHAR(100) NULL,
+    xray_periapical_teeth VARCHAR(60) NULL,
+    xray_occlusal_arch VARCHAR(20) NULL,
+    xray_other        VARCHAR(120) NULL,
+    updated_by        INT UNSIGNED NULL,
+    updated_at        DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (patient_id) REFERENCES patients(id) ON DELETE CASCADE,
+    FOREIGN KEY (updated_by) REFERENCES users(id) ON DELETE SET NULL
 ) ENGINE=InnoDB;
 
 -- Billing entries are never deleted: a mistake is voided (voided_at set, with a reason) and left out of

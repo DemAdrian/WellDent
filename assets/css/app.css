@@ -264,6 +264,53 @@ td.num, th.num { text-align: right; }
 
 /* ---------- forms ---------- */
 .form-card { margin-bottom: 20px; }
+
+/* Patient Information Record (patients/form.php) */
+.form-card-title { margin-bottom: 18px; padding-bottom: 12px; border-bottom: 1px solid var(--line); }
+.form-sub { margin: 18px 0 0; padding: 14px 16px 16px; border: 1px dashed var(--line); border-radius: 14px; transition: border-color .2s, background-color .2s; }
+.form-sub legend { padding: 0 6px; font-size: 13px; font-weight: 600; font-style: italic; color: var(--muted); }
+.form-sub.is-minor { border-style: solid; border-color: var(--amber-ink); background: var(--amber-bg); }
+.form-sub.is-minor legend { color: var(--amber-ink); }
+input[readonly] { color: var(--muted); cursor: default; }
+.med-questions { list-style: none; margin: 20px 0 0; padding: 0; }
+.med-q { padding: 14px 0; border-top: 1px solid var(--line); }
+.med-q[hidden], .med-follow[hidden] { display: none; }
+.med-q-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.med-q-sub { padding: 8px 0 0 26px; }
+.med-no { flex: none; min-width: 16px; font-weight: 700; color: var(--teal); }
+.med-text { flex: 1; min-width: 200px; font-size: 14.5px; }
+.med-follow { margin: 10px 0 0 26px; animation: drop .18s ease; }
+.med-q > .field, .med-q > .check-grid { margin: 12px 0 0 26px; }
+.yn { display: inline-flex; flex: none; padding: 3px; gap: 3px; border: 1px solid var(--line); border-radius: 11px; background: var(--panel-soft); }
+.yn-opt { position: relative; cursor: pointer; }
+.yn-opt input { position: absolute; opacity: 0; pointer-events: none; }
+.yn-opt span { display: block; min-width: 52px; padding: 6px 12px; border-radius: 8px; text-align: center; font-size: 13.5px; font-weight: 600; color: var(--muted); transition: background-color .15s, color .15s; }
+.yn-opt:hover span { color: var(--ink); }
+.yn-opt input:checked + span { background: var(--teal); color: #fff; box-shadow: 0 2px 6px color-mix(in srgb, var(--teal) 30%, transparent); }
+.yn-opt input[value="0"]:checked + span { background: var(--muted); }
+.yn-opt input:focus-visible + span { outline: 2px solid var(--teal); outline-offset: 1px; }
+.check-grid { display: grid; gap: 8px; }
+.check-grid-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.check-chip { display: flex; align-items: center; gap: 9px; padding: 8px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel-soft); font-size: 13.5px; cursor: pointer; transition: border-color .15s, background-color .15s; }
+.check-chip:hover { border-color: var(--teal); }
+.check-chip input { flex: none; width: 16px; height: 16px; margin: 0; accent-color: var(--teal); }
+.check-chip:has(input:checked) { border-color: var(--teal); background: var(--mint); font-weight: 600; }
+@media (max-width: 860px) {
+  .check-grid-3 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .med-q > .field, .med-q > .check-grid, .med-follow, .med-q-sub { margin-left: 0; padding-left: 0; }
+}
+@media (max-width: 480px) { .check-grid-3 { grid-template-columns: minmax(0, 1fr); } }
+.info-heading { margin: 24px 0 14px; padding-top: 18px; border-top: 1px solid var(--line); font-size: 15px; color: var(--teal-d); }
+.card-head + .info-heading, .medical-alert + .info-heading { margin-top: 4px; padding-top: 0; border-top: 0; }
+:root[data-theme="dark"] .info-heading { color: var(--link); }
+.medical-alert { margin-bottom: 18px; }
+.answer-list { list-style: none; margin: 18px 0 0; padding: 0; font-size: 14px; }
+.answer-list li { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 9px 0; border-top: 1px solid var(--line); }
+.answer-list small { display: block; margin-top: 2px; }
+.answer { flex: none; min-width: 44px; padding: 3px 10px; border-radius: 999px; text-align: center; font-size: 12.5px; }
+.answer-yes { background: var(--amber-bg); color: var(--amber-ink); }
+.answer-no { background: var(--mint); color: var(--mint-ink); }
+.answer-none { color: var(--muted); }
 .form-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px 18px; }
 .form-grid .span-2 { grid-column: span 2; }
 .form-grid .span-all { grid-column: 1 / -1; }
@@ -357,7 +404,7 @@ select option:disabled { color: var(--muted); }
 .dp-open input[type=date] { outline: 2px solid rgba(31, 138, 128, .35); outline-offset: 0; border-color: var(--teal); background-color: var(--input-focus); }
 
 .dp-pop {
-  position: fixed; z-index: 1000; width: 300px; padding: 14px; color: var(--ink);
+  position: fixed; z-index: 1000; width: 300px; padding: 14px; color: var(--ink); overflow-y: auto; overscroll-behavior: contain;
   background: var(--panel); border: 1px solid var(--line); border-radius: 18px;
   box-shadow: 0 22px 48px rgba(10, 30, 34, .2), 0 2px 6px rgba(10, 30, 34, .08);
   animation: dd-in .16s cubic-bezier(.4, 0, .2, 1);
@@ -515,6 +562,46 @@ select option:disabled { color: var(--muted); }
 .condition .n { grid-row: span 3; width: 24px; height: 24px; border-radius: 50%; color: #fff; font-size: 11px; font-weight: 700; display: grid; place-items: center; }
 .condition b { font-weight: 600; }
 .condition small { color: var(--muted); }
+/* Dental Record Chart (paper-form layout, includes/dental_chart.php) */
+.dental-record svg text { font-family: var(--font); }
+.dental-record .midline { stroke: var(--ink); stroke-width: 2.5; opacity: .55; }
+.dental-record .archline { stroke: var(--ink); stroke-width: 2; opacity: .35; }
+.dental-record .side, .dental-record .group { font-size: 11px; font-weight: 700; letter-spacing: .05em; fill: var(--muted); }
+.dental-record .box { fill: var(--panel); stroke: var(--chart-mid); stroke-width: 1.2; transition: stroke .15s; }
+.dental-record .code { font-size: 12px; font-weight: 700; }
+.dental-record .num { font-size: 12px; font-weight: 600; fill: var(--tooth-num); }
+.dental-record .surf { fill: var(--tooth-fill); stroke: var(--ink); stroke-opacity: .55; stroke-width: 1.3; transition: fill .15s, stroke .15s; }
+.dental-record .surf.on { stroke-opacity: .8; }
+.dental-record .tooth { cursor: pointer; outline: none; }
+.dental-record .tooth:hover .surf:not(.on), .dental-record .tooth:focus-visible .surf:not(.on) { fill: var(--mint); }
+.dental-record .tooth:hover .surf, .dental-record .tooth:focus-visible .surf { stroke: var(--teal); stroke-opacity: 1; }
+.dental-record .tooth:hover .box, .dental-record .tooth:focus-visible .box { stroke: var(--teal); }
+.dental-record .tooth:focus-visible .num { fill: var(--teal); }
+.dental-record .tooth.charted .num { fill: var(--ink); font-weight: 700; }
+.dental-record .cross { stroke: #d0453a; stroke-width: 2.6; stroke-linecap: round; pointer-events: none; }
+.dental-record .gone .surf { fill: var(--panel); stroke-dasharray: 3 2; }
+.dental-record .crowned .surf:not([data-surface="O"]) { stroke: #c9961a; stroke-opacity: 1; stroke-width: 2.6; }
+.dental-record .hidden-tooth .ring { opacity: .45; }
+.chart-legend { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px 24px; margin: 18px 0 24px; padding: 16px 18px; border: 1px solid var(--line); border-radius: 14px; background: var(--panel-soft); }
+.chart-legend h4 { margin: 0 0 8px; font-size: 13px; }
+.chart-legend ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; font-size: 12.5px; color: var(--muted); }
+.chart-legend b { display: inline-block; min-width: 28px; color: var(--ink); }
+.chart-legend .swatch { display: inline-block; width: 12px; height: 12px; margin-right: 6px; border-radius: 3px; vertical-align: -1px; }
+.code-chip { display: inline-block; min-width: 24px; margin-right: 4px; padding: 1px 6px; border-radius: 6px; text-align: center; font-size: 12px; font-weight: 700; color: var(--c); background: color-mix(in srgb, var(--c) 14%, transparent); }
+.surface-picker { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
+.surface-picker b { color: var(--teal-d); margin-right: 2px; }
+.exam-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.exam-box { margin: 0; padding: 12px 16px 16px; border: 1px solid var(--line); border-radius: 14px; min-width: 0; }
+.exam-box legend { padding: 0 6px; font-size: 14px; font-weight: 600; }
+.exam-box > .field { margin-top: 10px; }
+.exam-wide { grid-column: 1 / -1; }
+.exam-checks { grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); }
+.exam-fields { grid-template-columns: repeat(2, minmax(0, 1fr)); margin-top: 10px; }
+.exam-wide .exam-fields { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.check-chip:has(input:disabled) { cursor: default; }
+@media (max-width: 860px) {
+  .chart-legend, .exam-grid, .exam-fields, .exam-wide .exam-fields { grid-template-columns: minmax(0, 1fr); }
+}
 .history { list-style: none; margin: 0; padding: 0; font-size: 13px; display: flex; flex-direction: column; gap: 8px; max-height: 180px; overflow: auto; }
 .history li { background: var(--panel-soft); border-radius: 10px; padding: 8px 12px; }
 

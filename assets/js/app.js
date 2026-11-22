@@ -436,13 +436,18 @@
     }
 
     function place() {
+      // Below the field if it fits, else above; either way clamped so it never leaves the window.
       var r = input.getBoundingClientRect();
-      var w = 300, h = pop.offsetHeight || 360;
-      var below = window.innerHeight - r.bottom - 12, above = r.top - 12;
+      var margin = 12, gap = 6, vh = window.innerHeight;
+      pop.style.maxHeight = (vh - margin * 2) + 'px';
+      var w = pop.offsetWidth || 300, h = pop.offsetHeight || 360;
+      var below = vh - r.bottom - gap - margin, above = r.top - gap - margin;
       var up = below < h && above > below;
-      pop.style.left = Math.max(12, Math.min(r.left, window.innerWidth - w - 12)) + 'px';
-      pop.style.top = up ? '' : (r.bottom + 6) + 'px';
-      pop.style.bottom = up ? (window.innerHeight - r.top + 6) + 'px' : '';
+      var top = up ? r.top - gap - h : r.bottom + gap;
+      top = Math.max(margin, Math.min(top, vh - h - margin));
+      pop.style.left = Math.max(margin, Math.min(r.left, window.innerWidth - w - margin)) + 'px';
+      pop.style.top = top + 'px';
+      pop.style.bottom = '';
       pop.classList.toggle('dp-up', up);
     }
     function open(focusGrid) {
@@ -561,7 +566,7 @@
     });
     window.addEventListener('resize', function () { if (openDropdown) openDropdown.close(); });
     document.addEventListener('scroll', function (e) {
-      if (openDropdown && !(e.target.closest && e.target.closest('.dd-list'))) openDropdown.close();
+      if (openDropdown && !(e.target.closest && e.target.closest('.dd-list, .dp-pop'))) openDropdown.close();
     }, true);
     document.addEventListener('close', function () { if (openDropdown) openDropdown.close(); }, true); // a dialog closed
   }
@@ -661,18 +666,25 @@
       var logs = history[no] || [];
       dlg.querySelector('[name="tooth_no"]').value = no;
       dlg.querySelector('[data-text="tooth_title"]').textContent = 'Tooth ' + no + ' · ' + g.getAttribute('data-name');
-      dlg.querySelector('[name="status"]').value = g.getAttribute('data-status');
+      // New entries start from the tooth's current status boxes; an uncharted tooth starts as present.
+      var charted = g.classList.contains('charted');
+      dlg.querySelector('[name="status"]').value = charted ? g.getAttribute('data-status') : '/';
+      var treatment = dlg.querySelector('[name="treatment"]');
+      if (treatment) treatment.value = g.getAttribute('data-treatment') || '';
+      var marked = (g.getAttribute('data-surfaces') || '').split(',');
+      dlg.querySelectorAll('input[name="surfaces[]"]').forEach(function (cb) { cb.checked = marked.indexOf(cb.value) !== -1; });
       dlg.querySelector('[name="procedure_name"]').value = '';
       dlg.querySelector('[name="notes"]').value = '';
       resetFee(dlg.querySelector('form')); // otherwise the last tooth's charge carries over
       var list = dlg.querySelector('.history');
       list.innerHTML = '';
       if (!logs.length) {
-        list.innerHTML = '<li>No entries yet — tooth is charted as healthy.</li>';
+        list.innerHTML = '<li>No entries yet — this tooth has not been charted.</li>';
       }
       logs.forEach(function (l) {
         var li = document.createElement('li');
-        li.textContent = l.at + ' · ' + (labels[l.status] || l.status) +
+        var codes = [l.status, l.treatment].filter(Boolean).map(function (c) { return c + ' ' + (labels[c] || ''); }).join(' + ');
+        li.textContent = l.at + ' · ' + (codes || '—') + (l.surfaces ? ' · surfaces ' + l.surfaces.replace(/,/g, '') : '') +
           (l.procedure ? ' · ' + l.procedure : '') + (l.notes ? ' — ' + l.notes : '') + (l.by ? ' (' + l.by + ')' : '');
         list.appendChild(li);
       });
@@ -689,20 +701,44 @@
     });
   }
 
-  // ---------- paperless checklist on the patient form ----------
+  // ---------- patient information record form ----------
   var form = document.querySelector('[data-patient-form]');
   if (form) {
-    var filled = function (names) {
-      return names.some(function (n) { var el = form.elements[n]; return el && el.value.trim() !== ''; });
-    };
-    var all = function (names) {
-      return names.every(function (n) { var el = form.elements[n]; return el && el.value.trim() !== ''; });
+    var val = function (n) { var el = form.elements[n]; return el && el.value ? el.value.trim() : ''; };
+    var filled = function (names) { return names.some(function (n) { return val(n) !== ''; }); };
+    var all = function (names) { return names.every(function (n) { return val(n) !== ''; }); };
+    var answered = function (name) { return !!form.querySelector('input[name="' + name + '"]:checked'); };
+    var ageOf = function (iso) {
+      var b = parseDate(iso);
+      if (!b) return null;
+      var now = new Date(), age = now.getFullYear() - b.getFullYear();
+      if (now.getMonth() < b.getMonth() || (now.getMonth() === b.getMonth() && now.getDate() < b.getDate())) age--;
+      return age >= 0 ? age : null;
     };
     var update = function () {
+      // Age follows the birthdate; the guardian section matters for minors; question 9 is for women.
+      var age = ageOf(val('birth_date'));
+      var ageBox = form.querySelector('[data-age-display]');
+      if (ageBox) ageBox.value = age === null ? '' : age;
+      var minor = age !== null && age < 18;
+      var minorBox = form.querySelector('[data-minor-section]');
+      if (minorBox) {
+        minorBox.classList.toggle('is-minor', minor);
+        minorBox.querySelector('[data-minor-note]').textContent = minor ? '· this patient is under 18, please fill in' : '';
+      }
+      var female = val('sex') === 'female';
+      form.querySelectorAll('[data-women-only]').forEach(function (el) { el.hidden = !female; });
+      // "If so…" boxes open when their question is answered Yes.
+      form.querySelectorAll('[data-follow-for]').forEach(function (box) {
+        var yes = form.querySelector('input[name="' + box.dataset.followFor + '"][value="1"]');
+        box.hidden = !(yes && yes.checked);
+      });
+      var questions = [];
+      form.querySelectorAll('li[data-yes-no]' + (female ? ', [data-women-only] [data-yes-no]' : '')).forEach(function (q) { questions.push(q.dataset.yesNo); });
       var state = {
-        demographics: all(['full_name', 'birth_date', 'sex', 'phone']),
-        medical: filled(['allergies', 'conditions', 'medications']),
-        dental: filled(['dental_history']),
+        demographics: all(['last_name', 'first_name', 'birth_date', 'sex', 'phone', 'address']),
+        dental: filled(['previous_dentist', 'last_dental_visit', 'dental_history']),
+        medical: questions.every(answered),
         consent: form.elements.consent_signed.checked
       };
       Object.keys(state).forEach(function (k) {

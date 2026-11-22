@@ -11,6 +11,7 @@ if (!$patient) {
 }
 $tab = in_array(input('tab'), ['chart', 'billing', 'info'], true) ? input('tab') : 'chart';
 $back = fn(string $tab) => url('patients/view.php') . "?id=$id&tab=$tab";
+ensure_dental_chart_schema(); // converts charts made before the paper-form layout
 $hasAppointment = patient_has_appointment($id);
 $canChart = can('chart.edit') && $hasAppointment;
 $canVoid = can('billing.delete') && $hasAppointment;
@@ -19,35 +20,67 @@ if (is_post()) {
     verify_csrf();
     $action = input('action');
 
-    if (!$hasAppointment && in_array($action, ['tooth', 'treatment', 'void_treatment', 'void_payment'], true)) {
+    if (!$hasAppointment && in_array($action, ['tooth', 'exam', 'treatment', 'void_treatment', 'void_payment'], true)) {
         flash('error', NO_APPOINTMENT_MESSAGE);
-        redirect($back($action === 'tooth' ? 'chart' : 'billing'));
+        redirect($back(in_array($action, ['tooth', 'exam'], true) ? 'chart' : 'billing'));
     }
 
     if ($action === 'tooth') {
         require_perm('chart.edit');
         $tooth = (int) input('tooth_no');
         $status = input('status');
+        $treatment = input('treatment');
+        $surfaces = clean_surfaces($_POST['surfaces'] ?? []);
         $amountRaw = input('amount') === '' ? '0' : input('amount');
         $amount = (float) $amountRaw;
         $tooLong = length_errors(['procedure_name' => input('procedure_name'), 'notes' => input('notes')], ['procedure_name' => ['Procedure', 120], 'notes' => ['Notes', 255]]);
-        if ($tooth < 1 || $tooth > 32 || !isset(TOOTH_STATUSES[$status])) {
-            flash('error', 'Choose a tooth and a valid condition.');
+        if (!valid_tooth($tooth)) {
+            flash('error', 'Choose a tooth from the chart.');
+        } elseif (($status !== '' && !isset(TOOTH_CONDITIONS[$status])) || ($treatment !== '' && !isset(TOOTH_RESTORATIONS[$treatment]) && !isset(TOOTH_SURGERY[$treatment]))) {
+            flash('error', 'Choose a condition and treatment from the legend.');
+        } elseif ($status === '' && $treatment === '') {
+            flash('error', 'Choose a condition or a restoration/surgery for the tooth.');
         } elseif (!valid_amount($amountRaw, true)) {
             flash('error', 'Charge must be from ₱0 to ' . money(MAX_AMOUNT) . ', with at most 2 decimals.');
         } elseif ($tooLong) {
             flash('error', implode(' ', $tooLong));
         } else {
-            q('INSERT INTO tooth_records (patient_id, tooth_no, status, procedure_name, notes, recorded_by) VALUES (?, ?, ?, ?, ?, ?)',
-                [$id, $tooth, $status, nullable(input('procedure_name')), nullable(input('notes')), $user['id']]);
+            q('INSERT INTO tooth_records (patient_id, tooth_no, status, treatment, surfaces, procedure_name, notes, recorded_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+                [$id, $tooth, nullable($status), nullable($treatment), $surfaces ? implode(',', $surfaces) : null,
+                    nullable(input('procedure_name')), nullable(input('notes')), $user['id']]);
             if ($amount > 0) {
                 q('INSERT INTO treatments (patient_id, tooth_no, procedure_name, notes, amount, performed_on, dentist_id) VALUES (?, ?, ?, ?, ?, CURDATE(), ?)',
-                    [$id, $tooth, input('procedure_name') ?: TOOTH_STATUSES[$status][0], nullable(input('notes')), $amount, $user['id']]);
+                    [$id, $tooth, input('procedure_name') ?: tooth_code_label($treatment ?: $status), nullable(input('notes')), $amount, $user['id']]);
             }
-            log_activity('tooth_charted', 'patient', $id, "Tooth $tooth: $status");
+            $codes = trim($status . ' ' . $treatment) . ($surfaces ? ' (' . implode('', $surfaces) . ')' : '');
+            log_activity('tooth_charted', 'patient', $id, "Tooth $tooth: $codes");
             flash('success', "Tooth $tooth updated" . ($amount > 0 ? ' and ' . money($amount) . ' charged.' : '.'));
         }
         redirect($back('chart'));
+    }
+
+    if ($action === 'exam') {
+        require_perm('chart.edit');
+        $picked = fn(string $name, array $options) => implode(',', array_intersect(array_keys($options), (array) ($_POST[$name] ?? []))) ?: null;
+        $text = fn(string $name, int $max) => mb_substr(trim((string) input($name)), 0, $max) ?: null;
+        $exam = [
+            'periodontal' => $picked('periodontal', PERIODONTAL_OPTIONS),
+            'appliances' => $picked('appliances', APPLIANCE_OPTIONS), 'appliance_other' => $text('appliance_other', 120),
+            'tmd' => $picked('tmd', TMD_OPTIONS),
+            'xrays' => $picked('xrays', XRAY_OPTIONS), 'xray_periapical_teeth' => $text('xray_periapical_teeth', 60),
+            'xray_occlusal_arch' => in_array(input('xray_occlusal_arch'), ['Upper', 'Lower', 'Upper and lower'], true) ? input('xray_occlusal_arch') : null,
+            'xray_other' => $text('xray_other', 120),
+        ];
+        foreach (array_keys(OCCLUSION_FIELDS) as $f) {
+            $exam[$f] = $text($f, 40);
+        }
+        $exam['updated_by'] = $user['id'];
+        $cols = array_keys($exam);
+        q('INSERT INTO dental_exams (patient_id, ' . implode(', ', $cols) . ') VALUES (?' . str_repeat(', ?', count($cols)) . ')
+            ON DUPLICATE KEY UPDATE ' . implode(', ', array_map(fn($c) => "$c = VALUES($c)", $cols)), [$id, ...array_values($exam)]);
+        log_activity('dental_exam_saved', 'patient', $id);
+        flash('success', 'Examination findings saved.');
+        redirect($back('chart') . '#exam');
     }
 
     if ($action === 'treatment') {
@@ -56,8 +89,8 @@ if (is_post()) {
         $date = input('performed_on');
         $dentistId = input('dentist_id');
         $tooLong = length_errors(['procedure_name' => input('procedure_name'), 'notes' => input('notes')], ['procedure_name' => ['Procedure', 120], 'notes' => ['Notes', 255]]);
-        if (input('procedure_name') === '' || !valid_amount(input('amount'), true) || !valid_date($date) || ($tooth && ($tooth < 1 || $tooth > 32))) {
-            flash('error', 'Enter a procedure, a valid date and an amount from ₱0 to ' . money(MAX_AMOUNT) . '.');
+        if (input('procedure_name') === '' || !valid_amount(input('amount'), true) || !valid_date($date) || ($tooth && !valid_tooth($tooth))) {
+            flash('error', 'Enter a procedure, a valid date, a tooth from the chart (if any) and an amount from ₱0 to ' . money(MAX_AMOUNT) . '.');
         } elseif ($tooLong) {
             flash('error', implode(' ', $tooLong));
         } elseif ($dentistId !== '' && !in_array((int) $dentistId, array_map('intval', array_column(dentist_options(), 'id')), true)) {
@@ -221,14 +254,17 @@ $history = [];
 foreach ($toothLogs as $log) {
     $no = (int) $log['tooth_no'];
     if (!isset($toothState[$no])) {
-        $toothState[$no] = $log['status'];
+        $toothState[$no] = ['status' => $log['status'], 'treatment' => $log['treatment'], 'surfaces' => $log['surfaces']];
         $toothCurrent[$no] = $log;
     }
-    $history[$no][] = ['status' => $log['status'], 'procedure' => $log['procedure_name'], 'notes' => $log['notes'],
+    $history[$no][] = ['status' => $log['status'], 'treatment' => $log['treatment'], 'surfaces' => $log['surfaces'],
+        'procedure' => $log['procedure_name'], 'notes' => $log['notes'],
         'by' => $log['by_name'], 'at' => date('M j, Y', strtotime($log['recorded_at']))];
 }
 ksort($toothCurrent);
-$conditions = array_filter($toothCurrent, fn($l) => $l['status'] !== 'healthy');
+// Everything but a plain "present" tooth is worth listing under the chart.
+$conditions = array_filter($toothCurrent, fn($l) => $l['status'] !== '/' || $l['treatment'] || $l['surfaces']);
+$exam = q_row('SELECT e.*, u.name AS by_name FROM dental_exams e LEFT JOIN users u ON u.id = e.updated_by WHERE e.patient_id = ?', [$id]) ?: [];
 
 $facts = array_filter([
     age($patient['birth_date']) !== null ? age($patient['birth_date']) . ' years old' : null,
@@ -295,23 +331,76 @@ layout_start($patient['full_name'], 'patients', ['subtitle' => $patient['care_ty
 
 <?php if ($tab === 'chart'): ?>
   <section class="card">
-    <h2>Interactive Dental Chart</h2>
-    <p class="muted small" style="margin:6px 0 16px"><?= $canChart ? 'Click any tooth to view its history or update its condition and procedure.'
+    <div class="card-head"><h2>Dental Record Chart</h2><span class="muted small">FDI numbering</span></div>
+    <p class="muted small" style="margin:6px 0 16px"><?= $canChart ? 'Click any tooth to view its history, set its status boxes and mark affected surfaces.'
         : (!$hasAppointment ? 'Click any tooth to view its history. Book an appointment to update the chart.' : 'Click any tooth to view its history. Only dentists can change the chart.') ?></p>
     <?= render_dental_chart($toothState) ?>
     <?= render_chart_legend() ?>
-    <h3 style="margin-bottom:12px">Documented dental conditions</h3>
-    <?php if (!$conditions): ?><p class="muted small">No conditions documented.</p><?php endif; ?>
+    <h3 style="margin-bottom:12px">Charted teeth</h3>
+    <?php if (!$conditions): ?><p class="muted small">No teeth charted yet.</p><?php endif; ?>
     <div class="conditions">
-      <?php foreach ($conditions as $no => $c): [$label, $color, $tint] = TOOTH_STATUSES[$c['status']]; ?>
-        <div class="condition" style="--tint:<?= $tint ?>;--c:<?= $color ?>;border-color:<?= $color ?>33">
+      <?php foreach ($conditions as $no => $c):
+          $main = $c['treatment'] ?: $c['status'];
+          $color = tooth_code_color($main); ?>
+        <div class="condition" style="--tint:color-mix(in srgb, <?= $color ?> 9%, var(--panel));--c:<?= $color ?>;border-color:color-mix(in srgb, <?= $color ?> 25%, transparent)">
           <span class="n" style="background:<?= $color ?>"><?= $no ?></span>
-          <b style="color:<?= $color ?>"><?= e($label) ?> <span class="muted small" style="font-weight:400">· <?= e(tooth_name($no)) ?></span></b>
+          <b><?php foreach (array_filter([$c['status'], $c['treatment']]) as $code): ?><span class="code-chip" style="--c:<?= tooth_code_color($code) ?>"><?= e($code) ?></span><?php endforeach; ?>
+            <?= e(implode(' · ', array_filter([tooth_code_label($c['status'] === '/' && $c['treatment'] ? null : $c['status']), tooth_code_label($c['treatment'])]))) ?>
+            <span class="muted small" style="font-weight:400">· <?= e(tooth_name($no)) ?><?= $c['surfaces'] ? ' · surfaces ' . e(str_replace(',', '', $c['surfaces'])) : '' ?></span></b>
           <span><?= e($c['procedure_name'] ?: '—') ?></span>
           <small><?= e($c['notes'] ?: 'Recorded ' . fmt_date($c['recorded_at'])) ?></small>
         </div>
       <?php endforeach; ?>
     </div>
+  </section>
+
+  <?php
+  $examChecks = function (string $name, array $options) use ($exam, $canChart): string {
+      $on = array_filter(explode(',', (string) ($exam[$name] ?? '')));
+      $out = '<div class="check-grid exam-checks">';
+      foreach ($options as $key => $label) {
+          $out .= '<label class="check-chip"><input type="checkbox" name="' . $name . '[]" value="' . $key . '"' . (in_array($key, $on, true) ? ' checked' : '')
+              . ($canChart ? '' : ' disabled') . '><span>' . e($label) . '</span></label>';
+      }
+      return $out . '</div>';
+  };
+  $examText = fn(string $name, string $label, string $placeholder = '') => '<div class="field"><label for="ex-' . $name . '">' . e($label) . '</label><input type="text" id="ex-' . $name . '" name="' . $name . '" value="' . e($exam[$name] ?? '') . '" placeholder="' . e($placeholder) . '" maxlength="120"' . ($canChart ? '' : ' disabled') . '></div>';
+  ?>
+  <section class="card" id="exam" style="margin-top:20px">
+    <div class="card-head"><h2>Examination</h2>
+      <?php if (!empty($exam['updated_at'])): ?><span class="muted small">Updated <?= e(fmt_date($exam['updated_at'], 'M j, Y')) ?><?= $exam['by_name'] ? ' by ' . e($exam['by_name']) : '' ?></span><?php endif; ?></div>
+    <form method="post" class="exam-grid">
+      <?= csrf_field() ?><input type="hidden" name="action" value="exam">
+      <fieldset class="exam-box"><legend>Periodontal Screening</legend><?= $examChecks('periodontal', PERIODONTAL_OPTIONS) ?></fieldset>
+      <fieldset class="exam-box"><legend>Occlusion</legend>
+        <div class="form-grid exam-fields">
+          <?php foreach (['molar_class', 'canine_class'] as $f): ?>
+            <div class="field"><label for="ex-<?= $f ?>"><?= e(OCCLUSION_FIELDS[$f]) ?></label>
+              <select id="ex-<?= $f ?>" name="<?= $f ?>"<?= $canChart ? '' : ' disabled' ?>><option value="">—</option>
+                <?php foreach (OCCLUSION_CLASSES as $cls): ?><option<?= selected($cls, $exam[$f] ?? '') ?>><?= $cls ?></option><?php endforeach; ?>
+              </select></div>
+          <?php endforeach; ?>
+          <?= $examText('overjet', 'Overjet', 'e.g. 3 mm') ?>
+          <?= $examText('overbite', 'Overbite', 'e.g. 2 mm') ?>
+          <?= $examText('midline_deviation', 'Midline Deviation', 'e.g. 1 mm to the left') ?>
+          <?= $examText('crossbite', 'Crossbite', 'e.g. Anterior, tooth 12') ?>
+        </div>
+      </fieldset>
+      <fieldset class="exam-box"><legend>Appliances</legend><?= $examChecks('appliances', APPLIANCE_OPTIONS) ?><?= $examText('appliance_other', 'Others') ?></fieldset>
+      <fieldset class="exam-box"><legend>TMD</legend><?= $examChecks('tmd', TMD_OPTIONS) ?></fieldset>
+      <fieldset class="exam-box exam-wide"><legend>X-ray Taken</legend>
+        <?= $examChecks('xrays', XRAY_OPTIONS) ?>
+        <div class="form-grid exam-fields">
+          <?= $examText('xray_periapical_teeth', 'Periapical: tooth no.', 'e.g. 36, 46') ?>
+          <div class="field"><label for="ex-occ">Occlusal</label>
+            <select id="ex-occ" name="xray_occlusal_arch"<?= $canChart ? '' : ' disabled' ?>><option value="">—</option>
+              <?php foreach (['Upper', 'Lower', 'Upper and lower'] as $arch): ?><option<?= selected($arch, $exam['xray_occlusal_arch'] ?? '') ?>><?= $arch ?></option><?php endforeach; ?>
+            </select></div>
+          <?= $examText('xray_other', 'Others') ?>
+        </div>
+      </fieldset>
+      <?php if ($canChart): ?><div class="exam-wide"><button class="btn btn-primary" type="submit">Save examination</button></div><?php endif; ?>
+    </form>
   </section>
 
   <script type="application/json" id="tooth-history"><?= json_encode($history, JSON_HEX_TAG | JSON_HEX_AMP) ?></script>
@@ -321,14 +410,23 @@ layout_start($patient['full_name'], 'patients', ['subtitle' => $patient['care_ty
       <div><span class="label">History</span><ul class="history" style="margin-top:8px"></ul></div>
       <?php if ($canChart): ?>
         <?= csrf_field() ?><input type="hidden" name="action" value="tooth"><input type="hidden" name="tooth_no">
-        <div class="field"><label for="t-status">Condition</label>
-          <select id="t-status" name="status"><?php foreach (TOOTH_STATUSES as $k => [$label]): ?><option value="<?= $k ?>"><?= e($label) ?></option><?php endforeach; ?></select></div>
+        <div class="row">
+          <div class="field spacer"><label for="t-status">Condition</label>
+            <select id="t-status" name="status"><option value="">— None —</option><?php foreach (TOOTH_CONDITIONS as $k => [$label]): ?><option value="<?= e($k) ?>"><?= e("$k  ·  $label") ?></option><?php endforeach; ?></select></div>
+          <div class="field spacer"><label for="t-treatment">Restoration / surgery</label>
+            <select id="t-treatment" name="treatment"><option value="">— None —</option><?php foreach (TOOTH_RESTORATIONS + TOOTH_SURGERY as $k => [$label]): ?><option value="<?= e($k) ?>"><?= e("$k  ·  $label") ?></option><?php endforeach; ?></select></div>
+        </div>
+        <div class="field"><span class="label">Surfaces</span>
+          <div class="surface-picker">
+            <?php foreach (TOOTH_SURFACES as $k => $label): ?><label class="check-chip"><input type="checkbox" name="surfaces[]" value="<?= $k ?>"><span><b><?= $k ?></b> <?= e($label) ?></span></label><?php endforeach; ?>
+          </div>
+          <span class="hint">Marked surfaces are coloured red for decay and blue for restorations.</span></div>
         <div class="field"><label for="t-proc">Procedure</label><input type="text" id="t-proc" name="procedure_name" maxlength="120" placeholder="e.g. Composite filling" list="procedure-list" data-fee-field="amount" autocomplete="off"><?= procedure_datalist() ?></div>
         <div class="field"><label for="t-notes">Notes</label><input type="text" id="t-notes" name="notes" maxlength="255" placeholder="e.g. Composite resin, A2 shade"></div>
         <div class="field"><label for="t-amt">Charge (optional)</label><input type="number" id="t-amt" name="amount" min="0" max="<?= MAX_AMOUNT ?>" step="0.01" placeholder="0.00"><span class="hint">Adds a treatment to this patient's bill.</span><span class="hint" data-fee-hint hidden></span></div>
         <div><button class="btn btn-primary" type="submit">Save tooth entry</button></div>
       <?php else: ?>
-        <input type="hidden" name="tooth_no"><input type="hidden" name="status"><input type="hidden" name="procedure_name"><input type="hidden" name="notes">
+        <input type="hidden" name="tooth_no"><input type="hidden" name="status"><input type="hidden" name="treatment"><input type="hidden" name="procedure_name"><input type="hidden" name="notes">
       <?php endif; ?>
     </form>
   </dialog>
@@ -378,7 +476,8 @@ layout_start($patient['full_name'], 'patients', ['subtitle' => $patient['care_ty
       <?= csrf_field() ?><input type="hidden" name="action" value="treatment">
       <div class="field"><label for="tr-proc">Procedure</label><input type="text" id="tr-proc" name="procedure_name" maxlength="120" required placeholder="e.g. Oral prophylaxis" list="procedure-list" data-fee-field="amount" autocomplete="off"><?= procedure_datalist() ?></div>
       <div class="row">
-        <div class="field spacer"><label for="tr-tooth">Tooth # (optional)</label><input type="number" id="tr-tooth" name="tooth_no" min="1" max="32"></div>
+        <div class="field spacer"><label for="tr-tooth">Tooth (optional)</label>
+          <select id="tr-tooth" name="tooth_no"><option value="">—</option><?php foreach (tooth_options() as $no => $label): ?><option value="<?= $no ?>"><?= e($label) ?></option><?php endforeach; ?></select></div>
         <div class="field spacer"><label for="tr-amt">Amount (₱)</label><input type="number" id="tr-amt" name="amount" min="0" max="<?= MAX_AMOUNT ?>" step="0.01" required></div>
       </div>
       <p class="hint" data-fee-hint hidden></p>
@@ -407,20 +506,66 @@ layout_start($patient['full_name'], 'patients', ['subtitle' => $patient['care_ty
 
 <?php else: ?>
   <div class="stack">
+    <?php
+    $p = $patient;
+    $allergyAll = array_merge(option_labels($p['allergy_list'], ALLERGY_OPTIONS), $p['allergies'] ? [$p['allergies']] : []);
+    $conditionAll = array_merge(option_labels($p['medical_conditions'], MEDICAL_CONDITIONS), $p['conditions'] ? [$p['conditions']] : []);
+    $infoSections = [
+        'Patient information' => [
+            'Record ID' => $p['record_no'], 'Last name' => $p['last_name'], 'First name' => $p['first_name'], 'Middle name' => $p['middle_name'],
+            'Birthdate' => $p['birth_date'] ? fmt_date($p['birth_date']) . ' (' . age($p['birth_date']) . ' years old)' : null,
+            'Sex' => ucfirst((string) $p['sex']), 'Nickname' => $p['nickname'], 'Religion' => $p['religion'], 'Nationality' => $p['nationality'],
+            'Mobile no.' => $p['phone'], 'Email address' => $p['email'], 'Occupation' => $p['occupation'], 'Home address' => $p['address'],
+            'Parent/guardian' => trim($p['guardian_name'] . ($p['guardian_occupation'] ? ' (' . $p['guardian_occupation'] . ')' : '')),
+            'Referred by' => $p['referred_by'], 'Reason for consultation' => $p['consultation_reason'],
+        ] + ($p['emergency_name'] || $p['emergency_phone'] ? [
+            'Emergency contact' => trim($p['emergency_name'] . ($p['emergency_relationship'] ? ' (' . $p['emergency_relationship'] . ')' : '') . ($p['emergency_phone'] ? ' · ' . $p['emergency_phone'] : '')),
+        ] : []),
+        'Dental history' => [
+            'Previous dentist' => $p['previous_dentist'], 'Last dental visit' => $p['last_dental_visit'], 'Other dental history' => $p['dental_history'],
+        ],
+        'Medical history' => [
+            'Physician' => trim($p['physician_name'] . ($p['physician_specialty'] ? ' · ' . $p['physician_specialty'] : '')),
+            'Physician’s office' => trim($p['physician_address'] . ($p['physician_phone'] ? ' · ' . $p['physician_phone'] : ''), ' ·'),
+            'Blood type' => $p['blood_type'], 'Blood pressure' => $p['blood_pressure'],
+            'Allergies' => implode(', ', $allergyAll), 'Conditions' => implode(', ', $conditionAll),
+        ],
+    ];
+    $answers = [];
+    foreach (MEDICAL_YES_NO as $name => [$no, $question, $follow]) {
+        $answers[] = ["$no. $question", yes_no_label($p[$name]), $follow && (int) $p[$name] === 1 ? $p[$follow[0]] : null];
+    }
+    if ($p['sex'] === 'female') {
+        foreach (WOMEN_YES_NO as $name => $question) $answers[] = ["9. $question", yes_no_label($p[$name]), null];
+    }
+    ?>
     <section class="card">
-      <div class="card-head"><h2>Patient information</h2><a class="btn btn-sm no-print" href="<?= url('patients/form.php') ?>?id=<?= $id ?>">Edit</a></div>
+      <div class="card-head"><h2>Patient Information Record</h2><a class="btn btn-sm no-print" href="<?= url('patients/form.php') ?>?id=<?= $id ?>">Edit</a></div>
+      <?php if ($allergyAll || $conditionAll): ?>
+        <div class="flash flash-error medical-alert" role="note"><b>Medical alert:</b>
+          <?= e(implode(' · ', array_filter([$allergyAll ? 'Allergic to ' . implode(', ', $allergyAll) : '', $conditionAll ? implode(', ', $conditionAll) : '']))) ?></div>
+      <?php endif; ?>
+      <?php foreach ($infoSections as $heading => $items): ?>
+        <h3 class="info-heading"><?= e($heading) ?></h3>
+        <dl class="info-grid">
+          <?php foreach ($items as $label => $value): ?>
+            <div><dt><?= e($label) ?></dt><dd><?= e($value !== null && $value !== '' ? $value : '—') ?></dd></div>
+          <?php endforeach; ?>
+        </dl>
+        <?php if ($heading === 'Medical history'): ?>
+          <ul class="answer-list">
+            <?php foreach ($answers as [$q, $a, $detail]): ?>
+              <li><span><?= e($q) ?><?php if ($detail): ?><small class="muted"><?= e($detail) ?></small><?php endif; ?></span>
+                <b class="answer answer-<?= strtolower($a === '—' ? 'none' : $a) ?>"><?= e($a) ?></b></li>
+            <?php endforeach; ?>
+          </ul>
+        <?php endif; ?>
+      <?php endforeach; ?>
+      <h3 class="info-heading">Clinic use</h3>
       <dl class="info-grid">
-        <?php foreach ([
-            'Record ID' => $patient['record_no'], 'Birth date' => fmt_date($patient['birth_date']), 'Sex' => ucfirst((string) $patient['sex']),
-            'Phone' => $patient['phone'], 'Email' => $patient['email'], 'Address' => $patient['address'],
-            'Emergency contact' => trim(($patient['emergency_name'] ?? '') . ($patient['emergency_relationship'] ? ' (' . $patient['emergency_relationship'] . ')' : '')),
-            'Emergency phone' => $patient['emergency_phone'],
-            'Consent' => $patient['consent_signed'] ? 'Signed ' . fmt_date($patient['consent_date']) : 'Not signed',
-            'Allergies' => $patient['allergies'], 'Conditions' => $patient['conditions'], 'Medications' => $patient['medications'],
-            'Dental history' => $patient['dental_history'], 'Notes' => $patient['notes'],
-        ] as $label => $value): ?>
-          <div><dt><?= e($label) ?></dt><dd><?= e($value !== null && $value !== '' ? $value : '—') ?></dd></div>
-        <?php endforeach; ?>
+        <div><dt>Signature &amp; date</dt><dd><?= e($p['consent_signed'] ? 'Signed ' . fmt_date($p['consent_date']) : 'Not signed') ?></dd></div>
+        <div><dt>Care type</dt><dd><?= e($p['care_type']) ?></dd></div>
+        <div><dt>Notes</dt><dd><?= e($p['notes'] ?: '—') ?></dd></div>
       </dl>
     </section>
 

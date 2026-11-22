@@ -33,6 +33,7 @@ require __DIR__ . '/db.php';
 require __DIR__ . '/auth.php';
 require __DIR__ . '/appointments.php';
 require __DIR__ . '/reminders.php';
+require __DIR__ . '/patient_record.php';
 require __DIR__ . '/layout.php';
 
 if (PHP_SAPI !== 'cli') {

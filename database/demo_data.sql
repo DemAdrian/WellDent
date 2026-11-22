@@ -39,19 +39,25 @@ INSERT INTO appointments (patient_id, dentist_id, starts_at, duration_min, proce
 
 INSERT INTO waitlist (patient_id, procedure_name) VALUES (7, 'Cleaning'), (8, 'Bracket repair');
 
-INSERT INTO tooth_records (patient_id, tooth_no, status, procedure_name, notes, recorded_by, recorded_at) VALUES
- (6, 3,  'crown',      'Dental Crown',       'Full ceramic crown placed', 2, NOW() - INTERVAL 240 DAY),
- (6, 6,  'filled',     'Composite Filling',  'Composite resin, A2 shade', 2, NOW() - INTERVAL 120 DAY),
- (6, 14, 'root_canal', 'Root Canal Therapy', 'Two canals treated', 2, NOW() - INTERVAL 30 DAY),
- (6, 19, 'extracted',  'Simple Extraction',  'Non-restorable decay', 2, NOW() - INTERVAL 200 DAY),
- (6, 30, 'filled',     'Amalgam Filling',    'Older restoration, monitor', 2, NOW() - INTERVAL 600 DAY),
- (5, 3,  'crown',      'Dental Crown',       'PFM crown', 2, NOW() - INTERVAL 650 DAY),
- (1, 8,  'braces',     'Bracket bonded',     NULL, 2, NOW() - INTERVAL 200 DAY),
- (1, 9,  'braces',     'Bracket bonded',     NULL, 2, NOW() - INTERVAL 200 DAY);
+-- Teeth use FDI numbering (11–48 permanent, 51–85 temporary) and the paper chart's legend codes.
+INSERT INTO tooth_records (patient_id, tooth_no, status, treatment, surfaces, procedure_name, notes, recorded_by, recorded_at) VALUES
+ (6, 16, '/',  'JC', NULL,  'Dental Crown',       'Full ceramic crown placed', 2, NOW() - INTERVAL 240 DAY),
+ (6, 13, '/',  'Co', 'M,O', 'Composite Filling',  'Composite resin, A2 shade', 2, NOW() - INTERVAL 120 DAY),
+ (6, 26, '/',  NULL, NULL,  'Root Canal Therapy', 'Root canal · Two canals treated', 2, NOW() - INTERVAL 30 DAY),
+ (6, 36, 'M',  'X',  NULL,  'Simple Extraction',  'Non-restorable decay', 2, NOW() - INTERVAL 200 DAY),
+ (6, 46, '/',  'Am', 'O',   'Amalgam Filling',    'Older restoration, monitor', 2, NOW() - INTERVAL 600 DAY),
+ (6, 47, 'D',  NULL, 'D,O', NULL,                 'Caries indicated for filling', 2, NOW() - INTERVAL 30 DAY),
+ (5, 16, '/',  'JC', NULL,  'Dental Crown',       'PFM crown', 2, NOW() - INTERVAL 650 DAY),
+ (1, 11, '/',  NULL, NULL,  'Bracket bonded',     'Braces', 2, NOW() - INTERVAL 200 DAY),
+ (1, 21, '/',  NULL, NULL,  'Bracket bonded',     'Braces', 2, NOW() - INTERVAL 200 DAY);
+
+INSERT INTO dental_exams (patient_id, periodontal, molar_class, canine_class, overjet, overbite, appliances, xrays, xray_periapical_teeth, updated_by) VALUES
+ (1, 'gingivitis', 'Class II', 'Class II', '5 mm', '4 mm', 'orthodontic', 'panoramic,cephalometric', NULL, 2),
+ (6, 'early', 'Class I', 'Class I', '2 mm', '2 mm', NULL, 'periapical', '26, 36', 2);
 
 INSERT INTO treatments (patient_id, tooth_no, procedure_name, amount, performed_on, dentist_id) VALUES
- (6, 3,  'Dental Crown', 8000, CURDATE() - INTERVAL 240 DAY, 2),
- (6, 14, 'Root Canal Therapy', 6500, CURDATE() - INTERVAL 30 DAY, 2),
+ (6, 16, 'Dental Crown', 8000, CURDATE() - INTERVAL 240 DAY, 2),
+ (6, 26, 'Root Canal Therapy', 6500, CURDATE() - INTERVAL 30 DAY, 2),
  (1, NULL, 'Orthodontic braces package (balance)', 12500, CURDATE() - INTERVAL 200 DAY, 2),
  (2, NULL, 'Oral prophylaxis', 1200, CURDATE() - INTERVAL 3 DAY, 2),
  (4, NULL, 'Retainer', 4200, CURDATE() - INTERVAL 3 DAY, 2),
