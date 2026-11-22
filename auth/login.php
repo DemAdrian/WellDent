@@ -63,7 +63,7 @@ if (is_post()) {
     <button class="btn btn-primary" type="submit">Sign in</button>
     <a class="small" href="<?= url('auth/forgot.php') ?>">Forgot your password?</a>
   </form>
-  <?php clinic_footer(true); ?>
 </div>
+<?php clinic_footer(); ?>
 </body>
 </html>

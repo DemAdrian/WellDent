@@ -143,36 +143,34 @@ function clinic_logo(): string
         . '" width="64" height="64" alt="">';
 }
 
-function clinic_footer(bool $authPage = false): void
+/** The one site footer: the last thing on every page, signed in or not, below everything else. */
+function clinic_footer(): void
 {
     ?>
-    <footer class="<?= $authPage ? 'auth-foot' : 'site-foot' ?> clinic-footer" role="contentinfo">
-      <div class="clinic-footer-brand">
-        <?= clinic_logo() ?>
-        <div>
-          <strong><?= e(config('clinic.name')) ?></strong>
-          <span><?= e(config('clinic.tagline')) ?></span>
-        </div>
+<footer class="clinic-footer" role="contentinfo">
+  <div class="clinic-footer-inner">
+    <div class="clinic-footer-brand">
+      <?= clinic_logo() ?>
+      <div>
+        <strong><?= e(config('clinic.name')) ?></strong>
+        <span><?= e(config('clinic.tagline')) ?></span>
       </div>
-      <div class="clinic-footer-credits">
-        <span><strong>WellDent+</strong> by Health++</span>
-        <?php if (!$authPage): ?>
-          <span>Baldonado · Magat · Moya · Perey</span>
-          <span>College of Engineering and Information Technology, Cavite State University – Indang · © <?= date('Y') ?></span>
-        <?php else: ?>
-          <span>Cavite State University – Indang · © <?= date('Y') ?></span>
-        <?php endif; ?>
-      </div>
-    </footer>
+    </div>
+    <div class="clinic-footer-credits">
+      <span><strong>WellDent+</strong> by Health++ · Baldonado · Magat · Moya · Perey</span>
+      <span>College of Engineering and Information Technology, Cavite State University – Indang · © <?= date('Y') ?></span>
+    </div>
+  </div>
+</footer>
     <?php
 }
 
 function layout_end(): void
 {
-    clinic_footer();
     ?>
   </main>
 </div>
+<?php clinic_footer(); ?>
 <script src="<?= url('assets/js/app.js?v=' . filemtime(APP_ROOT . '/assets/js/app.js')) ?>"></script>
 </body>
 </html>

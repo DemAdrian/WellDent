@@ -213,11 +213,11 @@ layout_start($appt ? 'Appointment details' : ($rebook ? 'Rebook appointment' : '
     <?php if ($appt): ?><input type="hidden" name="appointment_version" value="<?= appointment_version($appt) ?>"><?php endif; ?>
     <div class="form-grid">
       <div class="field span-2">
-        <div class="field" data-select-search hidden>
-          <label for="patient-search">Find an existing patient</label>
-          <input id="patient-search" type="search" placeholder="Name, phone, or record ID" data-filter-select="patient_id">
-        </div>
         <label for="patient_id">Patient *</label>
+        <div data-patient-combo="patient_id" hidden>
+          <input id="patient-search" type="search" list="patient-list" placeholder="Type a name, phone, or record ID" autocomplete="off">
+          <datalist id="patient-list"></datalist>
+        </div>
         <select id="patient_id" name="patient_id" required>
           <option value="">Choose patient…</option>
           <?php foreach ($patients as $p): ?>

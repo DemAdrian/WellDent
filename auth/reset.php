@@ -52,7 +52,7 @@ if ($reset && is_post()) {
       <button class="btn btn-primary" type="submit">Save new password</button>
     <?php endif; ?>
   </form>
-  <?php clinic_footer(true); ?>
 </div>
+<?php clinic_footer(); ?>
 </body>
 </html>

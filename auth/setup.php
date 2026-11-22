@@ -62,7 +62,7 @@ if ($userCount === 0 && is_post()) {
       <button class="btn btn-primary" type="submit">Create admin account</button>
     <?php endif; ?>
   </form>
-  <?php clinic_footer(true); ?>
 </div>
+<?php clinic_footer(); ?>
 </body>
 </html>

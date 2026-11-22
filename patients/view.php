@@ -185,6 +185,10 @@ unset($entry);
 $counted = array_values(array_filter($ledger, fn($l) => !$l['void']));
 $treatmentCount = count(array_filter($counted, fn($l) => $l['kind'] === 'treatment'));
 
+if (input('format') === 'pdf' && !$hasAppointment) {
+    flash('error', NO_APPOINTMENT_MESSAGE);
+    redirect($back('billing'));
+}
 if (input('format') === 'pdf') {
     require dirname(__DIR__) . '/includes/pdf.php';
     $due = '#e0785f';
@@ -333,8 +337,8 @@ layout_start($patient['full_name'], 'patients', ['subtitle' => $patient['care_ty
   <section class="card">
     <div class="card-head"><h2>Account ledger</h2>
       <div class="row no-print">
-        <a class="btn btn-sm" href="<?= $back('billing') ?>&amp;format=pdf">Statement PDF</a>
         <?php if ($hasAppointment): ?>
+          <a class="btn btn-sm" href="<?= $back('billing') ?>&amp;format=pdf">Statement PDF</a>
           <a class="btn btn-sm" href="<?= url('patients/payment.php') ?>?patient_id=<?= $id ?>">+ Log payment</a>
           <button class="btn btn-sm btn-primary" data-open="#treatment-dialog">+ Add treatment</button>
         <?php endif; ?>

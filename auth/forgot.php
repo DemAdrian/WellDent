@@ -39,7 +39,7 @@ if (is_post()) {
       <a class="small" href="<?= url('auth/login.php') ?>">Back to sign in</a>
     <?php endif; ?>
   </form>
-  <?php clinic_footer(true); ?>
 </div>
+<?php clinic_footer(); ?>
 </body>
 </html>
